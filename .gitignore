@@ -1,0 +1,12 @@
+# Office 临时锁文件（文档打开时生成，不应入库）
+~$*
+
+# 临时文件
+*.tmp
+*.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
