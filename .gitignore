@@ -10,3 +10,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# 开题报告（交付物，仅本地保留，不入库）
+docs/开题报告.docx
+docs/开题报告.pdf
