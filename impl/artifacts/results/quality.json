@@ -1,0 +1,136 @@
+{
+  "generated_at": "2026-10-23 11:01:17",
+  "n_samples": 6,
+  "mean": {
+    "ssim_ab": 1.0,
+    "edge_ssim_ab": 1.0,
+    "psnr_ab": 88.168333,
+    "ssim_bc": 0.916021,
+    "edge_ssim_bc": 0.831354,
+    "psnr_bc": 29.276667,
+    "ssim_ac": 0.916022,
+    "edge_ssim_ac": 0.831355
+  },
+  "rows": [
+    {
+      "sample": "horse_01",
+      "input": "artifacts\\samples\\horse_01.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 86.92,
+      "ssim_bc": 0.935903,
+      "edge_ssim_bc": 0.872638,
+      "mae_bc": 6.9073,
+      "psnr_bc": 28.68,
+      "ssim_ac": 0.935903,
+      "edge_ssim_ac": 0.872638,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.09573,
+        "L_ac": 0.09573,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "horse_02",
+      "input": "artifacts\\samples\\horse_02.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 0.999999,
+      "mae_ab": 0.0001,
+      "psnr_ab": 89.31,
+      "ssim_bc": 0.919767,
+      "edge_ssim_bc": 0.834254,
+      "mae_bc": 5.7453,
+      "psnr_bc": 30.03,
+      "ssim_ac": 0.919768,
+      "edge_ssim_ac": 0.834256,
+      "lpips": {
+        "L_ab": 1e-06,
+        "L_bc": 0.122989,
+        "L_ac": 0.122988,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "horse_03",
+      "input": "artifacts\\samples\\horse_03.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 87.84,
+      "ssim_bc": 0.920628,
+      "edge_ssim_bc": 0.834958,
+      "mae_bc": 7.6388,
+      "psnr_bc": 28.05,
+      "ssim_ac": 0.920628,
+      "edge_ssim_ac": 0.834958,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.122207,
+        "L_ac": 0.122207,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "horse_04",
+      "input": "artifacts\\samples\\horse_04.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 90.28,
+      "ssim_bc": 0.897419,
+      "edge_ssim_bc": 0.772584,
+      "mae_bc": 5.3297,
+      "psnr_bc": 30.75,
+      "ssim_ac": 0.897418,
+      "edge_ssim_ac": 0.772584,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.164999,
+        "L_ac": 0.164999,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "horse_05",
+      "input": "artifacts\\samples\\horse_05.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 88.51,
+      "ssim_bc": 0.916967,
+      "edge_ssim_bc": 0.84617,
+      "mae_bc": 6.6648,
+      "psnr_bc": 29.24,
+      "ssim_ac": 0.916967,
+      "edge_ssim_ac": 0.846171,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.118432,
+        "L_ac": 0.118431,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "horse_06",
+      "input": "artifacts\\samples\\horse_06.png",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0002,
+      "psnr_ab": 86.15,
+      "ssim_bc": 0.905445,
+      "edge_ssim_bc": 0.827521,
+      "mae_bc": 6.8578,
+      "psnr_bc": 28.91,
+      "ssim_ac": 0.905446,
+      "edge_ssim_ac": 0.827523,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.133517,
+        "L_ac": 0.133516,
+        "note": "proxy"
+      }
+    }
+  ]
+}

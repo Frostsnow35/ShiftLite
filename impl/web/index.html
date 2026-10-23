@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>轻迁 CycleLite · 实例迁移推理加速实验台</title>
+<link rel="stylesheet" href="/web/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦓</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">轻迁</div>
+    <div class="brand-text">
+      <h1>CycleLite · 实例迁移推理加速实验台</h1>
+      <p>基于 CycleGAN 的马 → 斑马迁移，与 Intel CPU 三组推理加速对比</p>
+    </div>
+  </div>
+  <div class="env">
+    <span class="chip" id="deviceChip">检测设备中…</span>
+    <span class="chip status" id="statusChip"><i></i>连接中</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-panel="demo">迁移演示</button>
+  <button class="tab" data-panel="perf">三组性能</button>
+  <button class="tab" data-panel="quality">质量评测</button>
+  <button class="tab" data-panel="plan">实验进度</button>
+</nav>
+
+<main>
+
+  <!-- ══════════ 迁移演示 ══════════ -->
+  <section class="panel-page active" id="page-demo">
+    <div class="demo-grid">
+
+      <aside class="card controls">
+        <div class="step">
+          <h2><span class="num">1</span>选择输入</h2>
+          <div class="samples" id="samples"></div>
+          <label class="upload" id="uploadLabel">
+            <input type="file" id="fileInput" accept="image/*" hidden>
+            <span class="up-icon">↑</span>
+            <span>上传自己的图片</span>
+            <small>支持 jpg / png，自动居中裁成正方形</small>
+          </label>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">2</span>选择推理后端</h2>
+          <div class="segments" id="groupSegments"></div>
+          <p class="hint" id="groupHint">A 组是基线，B、C 分别隔离「换引擎」与「压精度」的收益。</p>
+        </div>
+
+        <button class="primary" id="runBtn" disabled>开始迁移</button>
+        <p class="foot-note" id="runNote"></p>
+      </aside>
+
+      <section class="card viewer">
+        <div class="viewer-head">
+          <div class="viewer-title">
+            <h2>迁移结果</h2>
+            <span class="badge" id="viewerBadge">等待运行</span>
+          </div>
+          <div class="viewer-tools">
+            <button class="ghost active" data-mode="side">并排</button>
+            <button class="ghost" data-mode="slide">叠加滑动</button>
+          </div>
+        </div>
+
+        <div class="stage" id="stage">
+          <div class="stage-empty" id="stageEmpty">
+            <div class="empty-art">🐎 → 🦓</div>
+            <p>选一张马的照片，点「开始迁移」</p>
+            <small>左侧的样例图可以直接点</small>
+          </div>
+
+          <div class="compare side" id="compare">
+            <figure class="pane">
+              <img id="imgIn" alt="输入">
+              <figcaption>输入</figcaption>
+            </figure>
+            <figure class="pane">
+              <img id="imgOut" alt="输出">
+              <figcaption id="capOut">输出 · A 组</figcaption>
+            </figure>
+          </div>
+
+          <div class="slider-wrap" id="sliderWrap">
+            <img id="slideIn" alt="输入">
+            <img id="slideOut" alt="输出">
+            <div class="slide-handle" id="slideHandle"></div>
+            <input type="range" min="0" max="100" value="50" id="slideRange">
+          </div>
+
+          <div class="stage-loading" id="stageLoading">
+            <div class="spinner"></div>
+            <p>正在推理…</p>
+          </div>
+        </div>
+
+        <div class="live-metrics" id="liveMetrics">
+          <div class="lm"><span class="lm-k">单图延迟</span><span class="lm-v" id="lmLatency">—</span></div>
+          <div class="lm"><span class="lm-k">实时 FPS</span><span class="lm-v" id="lmFps">—</span></div>
+          <div class="lm"><span class="lm-k">运行后端</span><span class="lm-v" id="lmGroup">—</span></div>
+          <div class="lm"><span class="lm-k">输出尺寸</span><span class="lm-v" id="lmSize">—</span></div>
+        </div>
+        <p class="live-note">这里是单次交互的即时耗时，会受后台程序影响；正式的三组对比请到「三组性能」页看多轮测速结果。</p>
+      </section>
+    </div>
+  </section>
+
+  <!-- ══════════ 三组性能 ══════════ -->
+  <section class="panel-page" id="page-perf">
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="two-col">
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>单图延迟对比</h2>
+          <span class="sub" id="latencySub">含误差棒（均值 ± 标准差）</span>
+        </div>
+        <div class="chart" id="latencyChart"></div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>模型体积对比</h2>
+          <span class="sub">INT8 目标：压到 FP32 的约 1/4</span>
+        </div>
+        <div class="chart" id="sizeChart"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>测速协议</h2>
+        <span class="sub">结论只从三组实测得出，不预设 INT8 更快</span>
+      </div>
+      <div class="protocol" id="protocolBox"></div>
+    </section>
+  </section>
+
+  <!-- ══════════ 质量评测 ══════════ -->
+  <section class="panel-page" id="page-quality">
+    <div class="notice" id="qualityNotice"></div>
+
+    <div class="two-col">
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>量化保真度 · 三对差异归因</h2>
+          <span class="sub">a=PyTorch · b=OV FP32 · c=OV INT8</span>
+        </div>
+        <div class="chart" id="lpipsChart"></div>
+        <ul class="legend-note">
+          <li><b>a→b（转换差异）</b> 应≈0；偏大说明转换有 bug，不是量化的锅</li>
+          <li><b>b→c（量化差异）</b> 核心指标，量化本身引入的损失</li>
+          <li><b>a→c（总差异）</b> 原版到终版，应约等于前两项之和</li>
+          <li class="muted-note">当前数值为 1 − SSIM 的代理值；接入感知网络后替换为真实 LPIPS</li>
+        </ul>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>结构保真</h2>
+          <span class="sub">越接近 1 越好</span>
+        </div>
+        <div class="chart" id="structChart"></div>
+        <ul class="legend-note">
+          <li><b>SSIM</b> 全图结构相似度</li>
+          <li><b>边缘 SSIM</b> 只看结构、不比纹理</li>
+          <li><b>背景 SSIM</b> 掩码外区域，验证背景未被改写</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>逐样本明细</h2>
+        <span class="sub" id="qualitySub"></span>
+      </div>
+      <div class="table-wrap"><table id="qualityTable"></table></div>
+    </section>
+  </section>
+
+  <!-- ══════════ 实验进度 ══════════ -->
+  <section class="panel-page" id="page-plan">
+    <section class="card">
+      <div class="card-head">
+        <h2>实验进度 E0 – E6</h2>
+        <span class="sub">对齐《人工智能导论》四阶段与小组方案 §6</span>
+      </div>
+      <div class="exp-grid" id="expGrid"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>数据来源说明</h2>
+        <span class="sub">哪些是实测，哪些还没接入</span>
+      </div>
+      <div class="honesty" id="honestyBox"></div>
+    </section>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span>轻迁 CycleLite · 华南师范大学计算机学院《人工智能导论》课程项目 · 4 人小组</span>
+  <span id="footTime"></span>
+</footer>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
