@@ -1,0 +1,11 @@
+# 轻迁 CycleLite 依赖
+# torch 用 CPU 版即可：pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0
+openvino>=2024.0
+nncf>=2.6
+onnx>=1.15
+numpy>=1.24
+pillow>=10.0
+
+# 可选：仅用于诊断 ONNX 导出是否与 PyTorch 一致
+# onnxruntime>=1.17
