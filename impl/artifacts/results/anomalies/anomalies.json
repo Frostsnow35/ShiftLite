@@ -1,0 +1,83 @@
+[
+  {
+    "name": "n02381460_200",
+    "reason": "ssim_bc=0.768157 < 阈值 0.8",
+    "metrics": {
+      "sample": "n02381460_200",
+      "input": "artifacts\\eval\\testA\\n02381460_200.jpg",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 87.26,
+      "ssim_bc": 0.768157,
+      "edge_ssim_bc": 0.605213,
+      "mae_bc": 6.8452,
+      "psnr_bc": 29.19,
+      "ssim_ac": 0.768158,
+      "edge_ssim_ac": 0.605213,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.190992,
+        "L_ac": 0.190982,
+        "note": "real"
+      },
+      "mask_iou_ac": 0.882318,
+      "background_ssim_ac": 0.770181
+    },
+    "file": "n02381460_200.png"
+  },
+  {
+    "name": "n02381460_7170",
+    "reason": "ssim_bc=0.747238 < 阈值 0.8",
+    "metrics": {
+      "sample": "n02381460_7170",
+      "input": "artifacts\\eval\\testA\\n02381460_7170.jpg",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 0.999999,
+      "mae_ab": 0.0001,
+      "psnr_ab": 90.28,
+      "ssim_bc": 0.747238,
+      "edge_ssim_bc": 0.553696,
+      "mae_bc": 9.0176,
+      "psnr_bc": 26.74,
+      "ssim_ac": 0.747238,
+      "edge_ssim_ac": 0.553695,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.298683,
+        "L_ac": 0.298685,
+        "note": "real"
+      },
+      "mask_iou_ac": 0.86354,
+      "background_ssim_ac": 0.75127
+    },
+    "file": "n02381460_7170.png"
+  },
+  {
+    "name": "n02381460_7190",
+    "reason": "ssim_bc=0.799053 < 阈值 0.8",
+    "metrics": {
+      "sample": "n02381460_7190",
+      "input": "artifacts\\eval\\testA\\n02381460_7190.jpg",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0001,
+      "psnr_ab": 89.61,
+      "ssim_bc": 0.799053,
+      "edge_ssim_bc": 0.66757,
+      "mae_bc": 7.2296,
+      "psnr_bc": 28.62,
+      "ssim_ac": 0.799054,
+      "edge_ssim_ac": 0.66757,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.161928,
+        "L_ac": 0.161922,
+        "note": "real"
+      },
+      "mask_iou_ac": 0.919477,
+      "background_ssim_ac": 0.799386
+    },
+    "file": "n02381460_7190.png"
+  }
+]

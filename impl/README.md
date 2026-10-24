@@ -35,10 +35,11 @@ python cli.py bench
 python cli.py quality
 
 # 4b. 接真实感知网络（LPIPS/FID/KID/Canny/掩码/判别），首次会下约 600MB 权重
-python cli.py quality --deep
+#     正式口径用 --limit 120（testA 全量，方案 §4）；默认 4 张仅供联调
+python cli.py quality --deep --limit 120
 
-# 5. E4 层间分工：逐层表示漂移
-python cli.py layers
+# 5. E4 层间分工：逐层表示漂移（正式口径同样 --limit 120）
+python cli.py layers --limit 120
 
 # 6. 打开可视化界面
 python cli.py serve
@@ -150,23 +151,30 @@ ShiftLite-impl/
 `max|Δ| = 7e-6`，`mean|Δ| = 1e-6`（随机输入，2026-10-23）；
 真实样例图输入按灰度级判据 `max = 0.0014 灰度级 / mean = 0.0001 灰度级`（2026-10-24，阈值 ≤5 / ≤0.5）——两种输入下转换均几乎无损。
 
-### 5.3 质量（6 张 testA 样例均值）
+### 5.3 质量（正式评测：testA 全量 120 张生成批 vs testB 全量 140 张参照批，2026-10-24）
 
 | 指标 | 数值 | 说明 |
 |---|---|---|
-| SSIM(a,b) / PSNR(a,b) | 1.0000 / ≈87 dB | 转换无损失，符合预期 |
-| SSIM(b,c) / PSNR(b,c) | ≈0.92 / ≈29 dB | 量化引入可测但可接受的退化（2026-10-24 复测 0.9128 / 28.8 dB，**已复现**） |
-| 边缘 SSIM(b,c) | 0.831（梯度幅值版）/ 0.648（Canny 版） | 结构保留好于纹理；**方案 §4 指定 Canny 版**，报告引用 0.648，另一个仅作对照 |
-| LPIPS(a,b) / LPIPS(b,c) | 0.000 / 0.066 | 真实感知指标（`quality --deep`，2026-10-24） |
-| FID(B vs 真实斑马) | 232.6 | ⚠️ 仅 6 生成 vs 3 真实，**无统计意义**，正式值需 testA 120 / testB 140 |
+| SSIM(a,b) / PSNR(a,b) | 1.0000 / 88.39 dB | 转换无损失，符合预期 |
+| SSIM(b,c) / PSNR(b,c) | 0.8854 / 28.91 dB | 量化引入可测但可接受的退化 |
+| 边缘 SSIM(b,c) | 0.785（梯度幅值版）/ **0.620（Canny 版）** | 结构保留好于纹理；**方案 §4 指定 Canny 版**，报告引用 0.620，梯度幅值版仅作对照 |
+| LPIPS(a,b) / LPIPS(b,c) / LPIPS(a,c) | 0.000 / 0.099 / 0.099 | 真实 LPIPS（AlexNet v0.1），120 张逐图均值 |
+| FID / KID（B 批 vs 真实斑马） | 80.70 / 0.0225 ± 0.0066 | 两批分别比较（方案 §4）；KID subset=50×100 |
+| FID / KID（C 批 vs 真实斑马） | 81.68 / 0.0252 ± 0.0068 | INT8 后分布偏移仅 +0.98 FID |
+| 掩码 IoU(a,c) / 背景 SSIM(a,c) | 0.814 / 0.893 | Mask R-CNN 检出 110/120 对 |
+| 斑马判别 top1（B 批 / C 批） | 85.00% / 85.83% | ResNet-50 任务判别，量化前后持平（差值在噪声内） |
+| 异常样本登记 | 3 例（ssim_bc < 0.80） | `n02381460_200` / `7170` / `7190`，落 `artifacts/results/anomalies/` |
 
 `SSIM(a,c) ≈ SSIM(b,c)`，与"转换≈0 + 量化=全部差异"的归因预期一致。
+判别率 B≈C、FID/KID 仅个位数偏移，说明 INT8 量化未伤任务语义；
+6 张样例时代的旧数字（FID 232.6、判别 66.7% 等）样本量不合法，一律作废。
 
-### 5.4 E4 层间分工（真实权重，2026-10-24）
+### 5.4 E4 层间分工（真实权重，testA 全量 120 张，2026-10-24）
 
-残差块余弦相似度 **0.9994 → 0.9655 沿深度单调下降**，相对 L2 误差 0.035 → 0.265 单调上升；
-编码段（down_relu_1..3）稳定在 0.9996，解码头部（head_conv 0.9887）漂移显著。
-量化误差沿残差块逐级累积的分工形态成立，`artifacts/results/layers.json`。
+残差块余弦相似度 **0.9994 → 0.9644 沿深度单调下降**，相对 L2 误差 0.035 → 0.269 单调上升；
+编码段（down_relu_1..3）稳定在 0.9996，解码头部（head_conv 0.9859）漂移显著。
+量化误差沿残差块逐级累积的分工形态在 120 张全量上成立（15 探针层，n=120，校准 300），
+`artifacts/results/layers.json`。
 
 ---
 
@@ -208,12 +216,13 @@ ShiftLite-impl/
 pip install -r requirements.txt      # 含 torchvision / opencv-python / lpips
 export TORCH_HOME=E:/somewhere/torch # 可选：Windows 上避免权重缓存落到 C 盘
 
-python cli.py quality --deep
+python cli.py quality --deep --limit 120   # 正式口径：testA 全量（方案 §4）
 ```
 
 首次运行会下载约 600 MB 预训练权重（alexnet / inception_v3 / resnet50 / maskrcnn），
 之后走缓存。输出落在 `artifacts/results/quality.json` 的 `deep` 字段，同时
 `metrics_source` 会标成 `"real"`（不带 `--deep` 是 `"proxy"`）。
+FID/KID 参照批自动取 `eval/testB` 全量 140 张真实斑马图。
 
 ---
 
