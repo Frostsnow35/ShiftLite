@@ -39,6 +39,12 @@ DATASET_SOURCES = [
 
 CALIB = ART / "calib"
 
+# 方案 §3.3 口径：校准集取 trainA 前 300 张马图，与评测所用 test 集隔离；
+# 演示/评测样例取 testA、testB。三者来源不同，不可互相替代。
+CALIB_SUBSET = 300
+N_SAMPLE_HORSE = 6
+N_SAMPLE_ZEBRA = 3
+
 
 def _p(msg: str) -> None:
     print(msg, flush=True)
@@ -108,9 +114,20 @@ def _zip_ok(path: Path) -> bool:
         return False
 
 
+def dir_prefix(names) -> str:
+    """一批样本在 zip 里的目录前缀（如 horse2zebra/trainA），用于记录数据来源。"""
+    for n in names:
+        return "/".join(n.split("/")[:-1]) or "."
+    return "-"
+
+
 def download_dataset() -> Path:
-    """取样例数据：优先用已有的完整包；否则先下 1.8MB 的 mini（几秒），
-    只有在需要 100 张校准集时才值得去下 111MB 的完整包。"""
+    """取数据集：先复用已下过的包，没有则按 DATASET_SOURCES 顺序下载。
+
+    顺序以「能否支撑方案 §3.3 的口径」为准，不看下载快慢：校准要 trainA
+    前 300 张、评测要 testA 120 / testB 140 张，只有 111 MB 的完整包满足；
+    mini 包各域仅 10 张（实测 45 个条目），只能用来跑通流程，不能出结论数据。
+    """
     # 1) 已有且完整的包直接复用，完整版优先
     for fname, _url, _size in DATASET_SOURCES:
         dst = ART / fname
@@ -118,8 +135,8 @@ def download_dataset() -> Path:
             _p(f"  [复用] {fname}（{dst.stat().st_size/1024/1024:.1f} MB）")
             return dst
 
-    # 2) 都没下过：按体积从小到大尝试，避免被大包卡住
-    for fname, url, size_mb in sorted(DATASET_SOURCES, key=lambda s: s[2]):
+    # 2) 都没下过：从完整包开始试
+    for fname, url, size_mb in DATASET_SOURCES:
         dst = ART / fname
         try:
             _p(f"  下载 {fname}（约 {size_mb} MB，支持断点续传）…")
@@ -133,24 +150,34 @@ def download_dataset() -> Path:
     raise SystemExit("样例数据全部下载失败，请检查网络后重试")
 
 
-def prepare_samples(n_horse: int = 6, n_zebra: int = 3, n_calib: int = 100) -> int:
-    """从数据集解压样例图（演示用）与校准集（量化用）。
+def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA,
+                    n_calib: int = CALIB_SUBSET) -> int:
+    """从数据集解压演示样例与校准集。
 
-    校准集必须是 A 域（马）图像，对应方案 §3.3 的「testA 前 100 张」。
+    三批数据的来源互不重叠，对应方案 §3.3 与 §4 的口径：
+        samples/ 演示与评测用：testA（马）前 n_horse 张 + testB（斑马）前 n_zebra 张
+        calib/   量化校准用：trainA 前 n_calib 张
+    校准集必须取自 trainA；若与评测集同源（例如都取 testA），INT8 的量化参数
+    会在待评测的那几张图上统计得到，SSIM/LPIPS 的 b-c 差值会被系统性地低估。
     """
     import zipfile
+    import json
 
     SAMPLES.mkdir(parents=True, exist_ok=True)
     CALIB.mkdir(parents=True, exist_ok=True)
     zip_path = download_dataset()
 
+    skipped: list[str] = []
+
     def save(z, name, dst):
+        """解一张图。失败时不计入 used，并把文件名记下来——zip 条目损坏
+        在断点续传后时有发生，静默跳过会让"准备了 300 张"变成假话。"""
         try:
             with z.open(name) as f:
                 Image.open(f).convert("RGB").save(dst)
             return True
         except Exception as e:
-            _p(f"  [跳过] {name}：{type(e).__name__}")
+            skipped.append(f"{name}（{type(e).__name__}）")
             return False
 
     with zipfile.ZipFile(zip_path) as z:
@@ -171,22 +198,43 @@ def prepare_samples(n_horse: int = 6, n_zebra: int = 3, n_calib: int = 100) -> i
 
         used = 0
         for i, name in enumerate(horses[:n_horse], 1):
-            save(z, name, SAMPLES / f"horse_{i:02d}.png")
-            used += 1
+            if save(z, name, SAMPLES / f"horse_{i:02d}.png"):
+                used += 1
         for i, name in enumerate(zebras[:n_zebra], 1):
-            save(z, name, SAMPLES / f"zebra_{i:02d}.png")
-            used += 1
+            if save(z, name, SAMPLES / f"zebra_{i:02d}.png"):
+                used += 1
 
-        # 校准集取 testA 前 n_calib 张，与方案 §3.3 一致
-        calib_src = horse_test or horse_train
+        # 校准集：trainA 前 n_calib 张（方案 §3.3），与 testA/testB 评测集隔离。
+        if not horse_train:
+            raise SystemExit(
+                f"{zip_path.name} 里没有 trainA（训练集马图），无法准备校准集。\n"
+                f"        请删除 {zip_path} 后重跑 setup 以下载完整版 horse2zebra.zip。")
+        calib_src = horse_train
         calib_n = min(len(calib_src), n_calib)
+        written = []
         for i, name in enumerate(calib_src[:calib_n], 1):
-            save(z, name, CALIB / f"calib_{i:03d}.png")
+            if save(z, name, CALIB / f"calib_{i:03d}.png"):
+                written.append(name)
 
-    _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {calib_n} 张")
-    if calib_n < n_calib:
-        _p(f"  注意：校准集只有 {calib_n} 张（方案要求 {n_calib} 张），"
-           f"下到完整版 horse2zebra.zip 后重跑 setup --force 可补足。")
+    # 留一份来源清单，报告里可以据此证明校准集与评测集不重叠
+    (CALIB / "manifest.json").write_text(
+        json.dumps({
+            "source_zip": zip_path.name,
+            "calib_prefix": dir_prefix(calib_src),
+            "requested": n_calib,
+            "written": len(written),
+            "eval_samples_prefix": dir_prefix(horses[:n_horse]),
+            "files": written[:10],
+            "skipped_count": len(skipped),
+            "skipped": skipped[:20],
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {len(written)} 张")
+    if skipped:
+        _p(f"  ⚠️ {len(skipped)} 个 zip 条目解压失败已跳过（见 calib/manifest.json）")
+    if len(written) < n_calib:
+        _p(f"  ⚠️ 校准集只有 {len(written)} 张，方案 §3.3 要求 trainA 前 {n_calib} 张；"
+           f"请在报告中如实写明实际张数，或重跑 setup 取完整数据集。")
     return used
 
 
@@ -207,7 +255,6 @@ def cmd_setup(args):
     else:
         export_onnx(weights, onnx_path, args.opset)
         _p(f"  [完成] {onnx_path.name} ({onnx_path.stat().st_size/1024/1024:.1f} MB)")
-
     _p("== 4/5 ONNX → OpenVINO IR ==")
     xml = MODELS / "horse2zebra.xml"
     if xml.exists() and not args.force:
@@ -228,10 +275,14 @@ def cmd_setup(args):
     else:
         from core.quantize import collect_calibration, quantize
         calib = collect_calibration(CALIB, args.subset)
-        _, info = quantize(xml, calib, int8, args.accuracy_control)
+        # 必须关键字传参：quantize 的第 4 个位置参数是 skip_instance_norm，
+        # 不是 accuracy_control（实参错位会让默认 setup 产出崩溃的 INT8）。
+        _, info = quantize(xml, calib, int8,
+                           skip_instance_norm=not args.keep_instance_norm,
+                           accuracy_control=args.accuracy_control)
         (MODELS / "quantize_report.json").write_text(
             json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
-        _p(f"  [完成] {int8.name}（校准 {len(calib)} 张）")
+        _p(f"  [完成] {int8.name}（校准 {len(calib)} 张，mode={info['mode']}）")
 
     _p("\n全部就绪。下一步：python cli.py bench")
 
@@ -423,8 +474,11 @@ def main():
     s = sub.add_parser("setup", help="下载模型并完成转换与量化")
     s.add_argument("--force", action="store_true")
     s.add_argument("--opset", type=int, default=13)
-    s.add_argument("--subset", type=int, default=100)
     s.add_argument("--accuracy-control", action="store_true")
+    s.add_argument("--subset", type=int, default=CALIB_SUBSET,
+                   help=f"校准集张数（方案口径 {CALIB_SUBSET} 张，取 trainA）")
+    s.add_argument("--keep-instance-norm", action="store_true",
+                   help="不排除 InstanceNorm/MVN；用于复现量化崩溃现象，勿用于正式产物")
     s.set_defaults(func=cmd_setup)
 
     b = sub.add_parser("bench", help="A/B/C 三组性能对比")

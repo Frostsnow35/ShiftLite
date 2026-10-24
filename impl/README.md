@@ -180,7 +180,7 @@ pip install torchvision          # 提供 ResNet-50 / Mask R-CNN / AlexNet 特�
 |---|---|
 | §3.2 PoC | `cli.py setup` 中的转换正确性验证（写 `convert_report.json`） |
 | §3.3 三组对比 | `cli.py bench` → `benchmark.json` |
-| §3.3 量化校准集 | `core/quantize.py`，取 `artifacts/samples` 前 N 张 |
 | §4 评价指标 | `core/metrics.py` + 界面「质量评测」页 |
 | §6 实验 E0–E6 | 界面「实验进度」页 |
+| §3.3 量化校准集 | `core/quantize.py`，取 `artifacts/calib`（**trainA**，与评测集隔离） |
 | §9 风险对策 | 量化失败时 `--accuracy-control` 走精度控制量化 |

@@ -66,10 +66,15 @@ def quantize(xml_path: Path, calib: list[np.ndarray], out_xml: Path,
             return -float(np.mean(errs))  # 越大越好
 
         pairs = nncf.Dataset(list(zip(subset, refs)), lambda p: p[0])
+        # MVN 保护对该分支同样适用：不传 ignored_scope 会把 InstanceNorm
+        # 一起量化，结果与默认 PTQ 那次实测到的崩溃（12.3 dB）相同。
+        ignored = kwargs.get("ignored_scope")
         quantized = nncf.quantize_with_accuracy_control(
-            model, dataset, pairs, validation_fn, subset_size=len(calib)
+            model, dataset, pairs, validation_fn,
+            subset_size=len(calib),
+            **({"ignored_scope": ignored} if ignored is not None else {}),
         )
-        mode = "accuracy_control"
+        mode = "accuracy_control" + ("_skip_mvn" if skip_instance_norm else "")
     else:
         quantized = nncf.quantize(model, dataset, **kwargs)
         mode = "ptq_mixed_skip_mvn" if skip_instance_norm else "ptq_mixed"
