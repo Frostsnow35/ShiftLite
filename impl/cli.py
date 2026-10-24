@@ -15,6 +15,7 @@ import platform
 import sys
 import time
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -55,11 +56,19 @@ DATASET_SOURCES = [
 
 CALIB = ART / "calib"
 
+# 方案 §4 正式评测口径：生成批 = testA 全部马图，FID/KID 参照批 = testB 全部斑马图。
+# samples/ 只放演示用的前几张；完整评测集单独落 eval/，与演示样例、校准集三分。
+EVAL = ART / "eval"
+EVAL_A = EVAL / "testA"
+EVAL_B = EVAL / "testB"
+
 # 方案 §3.3 口径：校准集取 trainA 前 300 张马图，与评测所用 test 集隔离；
 # 演示/评测样例取 testA、testB。三者来源不同，不可互相替代。
 CALIB_SUBSET = 300
 N_SAMPLE_HORSE = 6
 N_SAMPLE_ZEBRA = 3
+
+_IMG_EXTS = {".jpg", ".jpeg", ".png"}
 
 
 def _p(msg: str) -> None:
@@ -244,6 +253,9 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
             if save(z, name, CALIB / f"calib_{i:03d}.png"):
                 written.append(name)
 
+        # 完整评测集（方案 §4）：testA/testB 全量，与 samples/ 演示样例分开存放。
+        eval_a, eval_b = _extract_eval_sets(z, skipped, zip_path.name)
+
     # 留一份来源清单，报告里可以据此证明校准集与评测集不重叠
     (CALIB / "manifest.json").write_text(
         json.dumps({
@@ -257,13 +269,98 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
             "skipped": skipped[:20],
         }, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {len(written)} 张")
+    _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {len(written)} 张，"
+       f"评测集 testA {eval_a} 张 / testB {eval_b} 张")
     if skipped:
         _p(f"  ⚠️ {len(skipped)} 个 zip 条目解压失败已跳过（见 calib/manifest.json）")
     if len(written) < n_calib:
         _p(f"  ⚠️ 校准集只有 {len(written)} 张，方案 §3.3 要求 trainA 前 {n_calib} 张；"
            f"请在报告中如实写明实际张数，或重跑 setup 取完整数据集。")
     return used
+
+
+def _extract_eval_sets(z, skipped: list[str], zip_name: str) -> tuple[int, int]:
+    """从已打开的数据集 zip 解压完整评测集（方案 §4）。
+
+    testA 全部马图 → eval/testA，testB 全部斑马图 → eval/testB。
+    原始 jpg 字节直接落盘（不重编码），与 zip 条目逐一对应。
+    """
+    names = z.namelist()
+    horse_test = sorted(n for n in names
+                        if "/testA/" in n and n.lower().endswith(".jpg"))
+    zebra_test = sorted(n for n in names
+                        if "/testB/" in n and n.lower().endswith(".jpg"))
+    if not horse_test and not zebra_test:
+        return 0, 0
+
+    EVAL_A.mkdir(parents=True, exist_ok=True)
+    EVAL_B.mkdir(parents=True, exist_ok=True)
+    n_a = n_b = 0
+    for name in horse_test:
+        try:
+            (EVAL_A / Path(name).name).write_bytes(z.read(name))
+            n_a += 1
+        except Exception as e:
+            skipped.append(f"{name}（{type(e).__name__}）")
+    for name in zebra_test:
+        try:
+            (EVAL_B / Path(name).name).write_bytes(z.read(name))
+            n_b += 1
+        except Exception as e:
+            skipped.append(f"{name}（{type(e).__name__}）")
+
+    (EVAL / "manifest.json").write_text(
+        json.dumps({
+            "source_zip": zip_name,
+            "testA": {"entries": len(horse_test), "written": n_a},
+            "testB": {"entries": len(zebra_test), "written": n_b},
+            "protocol": "方案 §4：生成批 = testA 全量，FID/KID 参照批 = testB 全量",
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+    return n_a, n_b
+
+
+def prepare_eval() -> tuple[int, int]:
+    """确保完整评测集就位（eval/testA、eval/testB），返回 (马图数, 斑马图数)。
+
+    已解压则直接返回；本地没有数据集 zip 时安静跳过，
+    调用方回退到 samples/ 的演示样例并提示样本量不足。
+    """
+    def count(d: Path) -> list[Path]:
+        return ([p for p in d.iterdir() if p.suffix.lower() in _IMG_EXTS]
+                if d.exists() else [])
+
+    a, b = count(EVAL_A), count(EVAL_B)
+    if a and b:
+        return len(a), len(b)
+
+    zip_path = next((ART / name for name, _, _ in DATASET_SOURCES
+                     if (ART / name).exists()), None)
+    if zip_path is None:
+        return 0, 0
+
+    skipped: list[str] = []
+    with zipfile.ZipFile(zip_path) as z:
+        return _extract_eval_sets(z, skipped, zip_path.name)
+
+
+def eval_horse_paths(limit: int | None = None) -> list[Path]:
+    """评测马图（生成批输入）：优先 eval/testA 全量（方案 §4），退而求其次 samples/horse_*。"""
+    ps = (sorted(p for p in EVAL_A.iterdir() if p.suffix.lower() in _IMG_EXTS)
+          if EVAL_A.exists() else [])
+    if not ps:
+        ps = sorted(p for p in SAMPLES.iterdir()
+                    if p.suffix.lower() in _IMG_EXTS and p.name.startswith("horse"))
+    return ps[:limit] if limit else ps
+
+
+def eval_zebra_paths(limit: int | None = None) -> list[Path]:
+    """FID/KID 参照批（真实目标域）：优先 eval/testB 全量（方案 §4），退而求其次 samples/zebra_*。"""
+    ps = (sorted(p for p in EVAL_B.iterdir() if p.suffix.lower() in _IMG_EXTS)
+          if EVAL_B.exists() else [])
+    if not ps:
+        ps = sorted(p for p in SAMPLES.iterdir()
+                    if p.suffix.lower() in _IMG_EXTS and p.name.startswith("zebra"))
+    return ps[:limit] if limit else ps
 
 
 def cmd_setup(args):
@@ -437,15 +534,17 @@ def cmd_quality(args):
     out_dir = RESULTS / "quality"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    exts = {".jpg", ".jpeg", ".png"}
-    horses = sorted(p for p in SAMPLES.iterdir()
-                    if p.suffix.lower() in exts and p.name.startswith("horse"))
+    prepare_eval()
+    horses = eval_horse_paths(args.limit)
     if not horses:
-        raise SystemExit("样例目录里没有 horse_*.png，先跑 setup")
+        raise SystemExit("没有评测马图，先跑 python cli.py setup")
+    if len(horses) < args.limit:
+        _p(f"  ⚠️ 评测图只有 {len(horses)} 张（--limit {args.limit}），"
+           f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
 
     rows = []
     YA, YB, YC = [], [], []      # deep 模式用的批量图像
-    for p in horses[:args.limit]:
+    for p in horses:
         img = load_image(p)
         x = to_tensor(img)
         y = {}
@@ -558,25 +657,32 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
     if deep.get("canny_edge_ssim_bc") is not None:
         _p(f"  Canny 边缘 SSIM(b,c) = {deep['canny_edge_ssim_bc']}")
 
-    # 3) FID / KID：生成批 vs 真实目标域（testB 斑马）
-    zebras = sorted(p for p in SAMPLES.iterdir()
-                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-                    and p.name.startswith("zebra"))
-    if zebras and YB:
+    # 3) FID / KID：方案 §4 要求两批生成结果（FP32 批 b、INT8 批 c）
+    #    分别与同一批真实目标域（testB 斑马全量）比较，不能只报 B 批。
+    zebras = eval_zebra_paths()
+    if zebras and (YB or YC):
         ref = [np.asarray(load_image(z), dtype=np.uint8) for z in zebras]
         try:
-            fa = inception_features(YB)
             fb = inception_features(ref)
-            deep["fid"] = {"b_vs_real_zebra": fid(fa, fb),
-                           "n_generated": len(YB), "n_real": len(ref)}
-            deep["kid"] = kid(fa, fb, n_subsets=20,
-                              subset_size=min(50, len(YB), len(ref)))
-            _p(f"  FID(B vs 真实斑马) = {deep['fid']['b_vs_real_zebra']}  "
-               f"KID = {deep['kid']['mean']}")
+            fid_block = {"n_generated": len(YB) or len(YC), "n_real": len(ref)}
+            kid_block = {}
+            for tag, Y in (("b", YB), ("c", YC)):
+                if not Y:
+                    continue
+                f = inception_features(Y)
+                fid_block[f"{tag}_vs_real_zebra"] = fid(f, fb)
+                kid_block[f"{tag}_vs_real_zebra"] = kid(
+                    f, fb, n_subsets=100,
+                    subset_size=min(50, len(Y), len(ref)))
+                _p(f"  FID({tag} vs 真实斑马) = {fid_block[f'{tag}_vs_real_zebra']}  "
+                   f"KID = {kid_block[f'{tag}_vs_real_zebra']['mean']}"
+                   f"（subset {kid_block[f'{tag}_vs_real_zebra']['subset_size']}）")
+            deep["fid"] = fid_block
+            deep["kid"] = kid_block
         except Exception as e:
             _p(f"  [跳过] FID/KID：{type(e).__name__}: {str(e)[:160]}")
     else:
-        _p("  [跳过] FID/KID：samples 里没有 zebra_*.png 作为参照集")
+        _p("  [跳过] FID/KID：没有 zebra 参照批（eval/testB 或 samples）")
 
     # 4) 掩码 IoU + 背景 SSIM（真值掩码来自 Mask R-CNN）
     if YA and YC:
@@ -608,20 +714,25 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
         except Exception as e:
             _p(f"  [跳过] 掩码 IoU：{type(e).__name__}: {str(e)[:160]}")
 
-    # 5) 斑马判别准确率（生成结果里有多少被 ImageNet ResNet-50 判成斑马）
-    if YC:
+    # 5) 斑马判别准确率（任务保真；方案 §4「量化前后」→ b、c 两批各评一次）
+    disc = {}
+    for tag, Y in (("b", YB), ("c", YC)):
+        if not Y:
+            continue
         try:
-            preds = target_probabilities(YC)
+            preds = target_probabilities(Y)
             acc = float(np.mean([p["is_target"] for p in preds]))
-            deep["zebra_discrimination"] = {
+            disc[tag] = {
                 "top1_accuracy": round(acc, 6),
                 "mean_target_prob": round(
                     float(np.mean([p["target_prob"] for p in preds])), 6),
                 "n": len(preds),
             }
-            _p(f"  斑马判别 top1 准确率 = {acc:.2%}")
+            _p(f"  斑马判别 top1（{tag} 批）= {acc:.2%}（n={len(preds)}）")
         except Exception as e:
-            _p(f"  [跳过] 斑马判别：{type(e).__name__}: {str(e)[:160]}")
+            _p(f"  [跳过] 斑马判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
+    if disc:
+        deep["zebra_discrimination"] = disc
 
     # 6) 异常样本登记：不混进上面的均值；0 例也落盘，便于进度页区分"查过没问题/没查"
     bad = [r for r in rows
@@ -668,12 +779,13 @@ def cmd_layers(args):
     if args.images:
         paths = [Path(p) for p in args.images]
     else:
-        exts = {".jpg", ".jpeg", ".png"}
-        paths = sorted(p for p in SAMPLES.iterdir()
-                       if p.suffix.lower() in exts
-                       and p.name.startswith("horse"))[:args.limit]
+        prepare_eval()
+        paths = eval_horse_paths(args.limit)
     if not paths:
         raise SystemExit("没有可用的评测图")
+    if not args.images and len(paths) < args.limit:
+        _p(f"  ⚠️ 评测图只有 {len(paths)} 张（--limit {args.limit}），"
+           f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
 
     _p(f"  校准 {len(calib)} 张（trainA），量化侧 NNCF FakeQuantize 模拟")
     images = load_images(paths)
@@ -726,7 +838,8 @@ def main():
     b.set_defaults(func=cmd_bench)
 
     q = sub.add_parser("quality", help="质量与结构保真度量")
-    q.add_argument("--limit", type=int, default=4)
+    q.add_argument("--limit", type=int, default=4,
+                   help="参与评测的马图数量（方案 §4 正式口径为 testA 全量 120 张）")
     q.add_argument("--deep", action="store_true",
                    help="接入真实感知指标（LPIPS/FID/KID/Canny/掩码/判别），"
                         "首次运行需下载预训练权重")
@@ -737,7 +850,7 @@ def main():
     ly = sub.add_parser("layers", help="E4 层间分工：逐层表示漂移分析")
     ly.add_argument("--subset", type=int, default=CALIB_SUBSET)
     ly.add_argument("--limit", type=int, default=6,
-                    help="参与评测的马图数量（默认用 samples 里的全部样例）")
+                    help="参与评测的马图数量（取 eval/testA；方案 §4 正式口径为全量 120 张）")
     ly.add_argument("--images", nargs="+", default=None,
                     help="显式指定评测图，覆盖 --limit")
     ly.set_defaults(func=cmd_layers)

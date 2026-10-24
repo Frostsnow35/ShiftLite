@@ -19,11 +19,13 @@ artifacts/models/
 *.tar.gz
 artifacts/calib/
 artifacts/samples/
+artifacts/eval/
 artifacts/uploads/
 
 # ── 推理与评测的图片产物（JSON 记录保留）──
 artifacts/results/inference/
 artifacts/results/quality/
+artifacts/results/anomalies/*.png
 artifacts/results/_*
 
 # ── 编辑器 / 系统 ──
