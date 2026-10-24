@@ -257,9 +257,13 @@ def instance_masks(images: list[np.ndarray], label: str = _MASK_LABEL,
     cat_id = coco_label_index(label)
     # torchvision 检测模型收的是**逐个 0~1 的张量列表**，不是拼好的 batch；
     # 传 batch 会报 "expected np.ndarray (got Tensor)" 之类的错。
-    batch = (to_batch(images) + 1.0) / 2.0
+    # 但整批塞进去会让检测头一次性分配巨量中间特征（120 张实测分配 4.9 GB
+    # 失败，2026-10-24），必须分块前向。
+    outs = []
     with torch.no_grad():
-        outs = model([t for t in batch])
+        for i in range(0, len(images), 4):
+            batch = (to_batch(images[i:i + 4]) + 1.0) / 2.0
+            outs.extend(model([t for t in batch]))
 
     results = []
     for out in outs:

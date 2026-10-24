@@ -29,6 +29,7 @@ __all__ = [
     "capture_features",
     "build_simulated_int8",
     "compare_features",
+    "merge_rows",
     "layer_report",
 ]
 
@@ -190,13 +191,8 @@ def layer_features(feats_a: dict, feats_b: dict) -> list[dict]:
     return rows
 
 
-def compare_features(feats_list_a: list, feats_list_b: list) -> list[dict]:
-    """多图结果按层聚合（每张图逐层算，最后取均值）。"""
-    acc: dict[str, list[dict]] = {}
-    for fa, fb in zip(feats_list_a, feats_list_b):
-        for row in layer_features(fa, fb):
-            acc.setdefault(row["layer"], []).append(row)
-
+def merge_rows(acc: dict[str, list[dict]]) -> list[dict]:
+    """把逐图逐层的指标行按层聚合（取均值）。"""
     out = []
     for name, rows in acc.items():
         merged = {
@@ -213,6 +209,15 @@ def compare_features(feats_list_a: list, feats_list_b: list) -> list[dict]:
     return out
 
 
+def compare_features(feats_list_a: list, feats_list_b: list) -> list[dict]:
+    """多图结果按层聚合（每张图逐层算，最后取均值）。"""
+    acc: dict[str, list[dict]] = {}
+    for fa, fb in zip(feats_list_a, feats_list_b):
+        for row in layer_features(fa, fb):
+            acc.setdefault(row["layer"], []).append(row)
+    return merge_rows(acc)
+
+
 # ---------------- 主干流程 ----------------
 
 def load_images(paths: list[Path], size: int = 256) -> list[np.ndarray]:
@@ -222,15 +227,25 @@ def load_images(paths: list[Path], size: int = 256) -> list[np.ndarray]:
 
 def layer_report(weights: str | Path, calib: list[np.ndarray],
                  images: list[np.ndarray]) -> dict:
-    """一次性产出 E4 报告：两侧跑同一批图，逐层对齐后给漂移指标。"""
+    """产出 E4 报告：两侧逐图前向、逐层对齐后聚合漂移指标。
+
+    流式处理，逐图算完即释放特征：15 个探针层的全分辨率特征图每张两侧
+    约 300 MB，120 张全部驻留会到 30 GB 级（实测段错误，2026-10-24，
+    6 张样例时代无此问题）。
+    """
     base = load_generator(str(weights))
     quant = build_simulated_int8(weights, calib)
 
-    xs = [torch.from_numpy(np.ascontiguousarray(a)) for a in images]
-    fa = [capture_features(base, x) for x in xs]
-    fb = [capture_features(quant, x) for x in xs]
+    acc: dict[str, list[dict]] = {}
+    for a in images:
+        x = torch.from_numpy(np.ascontiguousarray(a))
+        fa = capture_features(base, x)
+        fb = capture_features(quant, x)
+        for row in layer_features(fa, fb):
+            acc.setdefault(row["layer"], []).append(row)
+        del fa, fb, x
 
-    rows = compare_features(fa, fb)
+    rows = merge_rows(acc)
     probe_names = [n for n, _ in enumerate_probe_layers(base)]
 
     return {
