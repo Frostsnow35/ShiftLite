@@ -1,4 +1,4 @@
-"""轻迁 CycleLite 本地可视化服务（仅标准库）。
+"""ShiftLite 本地可视化服务（仅标准库）。
 
 启动：python cli.py serve
 默认只绑定 127.0.0.1:8770。
@@ -105,44 +105,97 @@ def build_state() -> dict:
 
 
 def _experiments(conv, quant, bench, quality, avail) -> list[dict]:
+    """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
+
+    apple2orange 扩展已按收敛决定取消，不再占用编号；任务型斑马判别与结构/背景
+    保真属于 E3 的组成部分（PLAN §4），挂在 E3 卡片下作子项，不单列编号。
+    """
+
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
+    deep_layer = _read_json(RESULTS / "layers.json")
+    quality = quality or {}
+    q_deep = quality.get("deep") or {}
+    q_real = quality.get("metrics_source") == "real"
+
+    def layers_note():
+        if not deep_layer:
+            return "未开始：需跑 python cli.py layers"
+        # 逐层漂移可能落在噪声水平内，如实报道这一情形
+        summary = deep_layer.get("summary", {})
+        worst = summary.get("most_drifted_layer")
+        cos = summary.get("most_drifted_cosine")
+        monotone = summary.get("drift_monotonic_along_depth")
+        trend = "漂移随深度单调累积" if monotone else "漂移未呈现单调趋势"
+        if worst and isinstance(cos, (int, float)) and cos > 0.9999:
+            return (f"已完成：漂移最大的 {worst} 余弦 {cos:.6f}，"
+                    f"差异落在数值噪声水平内，属负结果，按期如实报道")
+        return f"已完成：漂移最大层 {worst}（余弦 {cos}），{trend}"
+
+    def quality_note():
+        if not quality:
+            return "待测"
+        base = "SSIM / PSNR / MAE 已算；"
+        if q_real:
+            parts = []
+            if q_deep.get("lpips"):
+                parts.append("真实 LPIPS")
+            if q_deep.get("fid"):
+                parts.append("FID/KID")
+            if q_deep.get("mask"):
+                parts.append("掩码 IoU + 背景 SSIM")
+            if q_deep.get("zebra_discrimination"):
+                parts.append("斑马判别")
+            if q_deep.get("anomalies"):
+                parts.append(f"异常登记 {q_deep['anomalies']['count']} 例")
+            return base + "已接真实感知指标：" + "、".join(parts)
+        return (base + "真实 LPIPS 与 FID/KID、掩码 IoU、斑马判别、异常登记"
+                "待跑 quality --deep（当前为代理值，不得写进报告）")
+
+    def conv_note():
+        if not conv:
+            return "等待转换"
+        gray = conv.get("max_gray")
+        img = conv.get("input_image")
+        if gray is not None:
+            ok = "判据通过" if conv.get("pass") else "判据未通过"
+            return (f"max|Δ|={gray} 灰度级（{ok}）；"
+                    f"输入 {img or '固定随机输入'}；"
+                    f"{conv.get('total_ops', '?')} 节点直转")
+        return f"max|Δ|={conv.get('max_abs')}（旧口径，建议用 setup 重生成）"
+
     return [
-        {"code": "E0", "title": "PoC 转换链路验证",
-         "half": "阶段三",
+        {"code": "E0", "title": "PoC：转换链路验证",
+         "half": "阶段二",
          "status": st(bool(conv)),
-         "note": (f"max|Δ|={conv['max_abs']}" if conv else "等待转换")},
-        {"code": "E1", "title": "基线出图（马 → 斑马）",
-         "half": "阶段三",
+         "note": conv_note()},
+        {"code": "E1", "title": "基线出图 + 可运行 Demo",
+         "half": "阶段二",
          "status": st(avail.get("A", False)),
-         "note": "A 组可用" if avail.get("A") else "等待权重"},
+         "note": "A 组可用，样例图与 Demo 已通" if avail.get("A") else "等待权重"},
         {"code": "E2", "title": "A/B/C 三组性能对比",
-         "half": "阶段三",
+         "half": "阶段二",
          "status": st(bool(bench)),
          "note": ("已完成 " + str((bench or {}).get("generated_at", ""))) if bench else "待测"},
-        {"code": "E3", "title": "量化保真度与迁移质量",
+        {"code": "E3", "title": "量化质量代价（E3）",
+         "half": "阶段二 / 三",
+         "status": st(q_real, bool(quality)),
+         "note": quality_note()},
+        {"code": "E4", "title": "层间分工分析（逐层表示漂移）",
+         "half": "阶段二",
+         "status": st(bool(deep_layer)),
+         "note": layers_note()},
+        {"code": "E5", "title": "训练复现（独立于主对照）",
          "half": "阶段三",
-         "status": st(False, bool(quality)),
-         "note": "结构指标已算；LPIPS/FID 待接入感知网络" if quality else "待测"},
-        {"code": "E4", "title": "扩展迁移对（apple2orange）",
-         "half": "阶段四",
          "status": "todo",
-         "note": "只验证流程兼容性，不重复全套指标"},
-        {"code": "E5", "title": "斑马判别准确率",
-         "half": "阶段四",
-         "status": "todo",
-         "note": "需 ImageNet ResNet-50"},
-        {"code": "E6", "title": "结构保真逐图评测",
-         "half": "阶段四",
-         "status": st(False, bool(quality)),
-         "note": "SSIM / 边缘 SSIM 已算；掩码 IoU 需 Mask R-CNN" if quality else "待测"},
+         "note": "自训权重不进 A/B/C 三组，单独成表"},
     ]
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "CycleLite/1.0"
+    server_version = "ShiftLite/1.0"
 
     def log_message(self, fmt, *args):
         print(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}", flush=True)
@@ -320,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def run(host: str = "127.0.0.1", port: int = 8770):
     srv = ThreadingHTTPServer((host, port), Handler)
-    print(f"轻迁 CycleLite 可视化界面已启动： http://{host}:{port}")
+    print(f"ShiftLite 可视化界面已启动： http://{host}:{port}")
     print("按 Ctrl+C 停止")
     try:
         srv.serve_forever()

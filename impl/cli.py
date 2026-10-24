@@ -1,4 +1,4 @@
-"""轻迁 CycleLite 命令行入口。
+"""ShiftLite 命令行入口。
 
     python cli.py setup      # 下载模型 → 转 ONNX → 转 IR → INT8 量化 → 拉样例图
     python cli.py bench      # A/B/C 三组性能对比（延迟 / FPS / 体积）
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import sys
 import time
@@ -25,9 +26,24 @@ MODELS = ART / "models"
 SAMPLES = ART / "samples"
 RESULTS = ART / "results"
 
-MODEL_URL = ("http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/"
-             "horse2zebra.pth")
+# 权重的下载源（按优先级逐个尝试）。
+# PLAN §3.3 写的是"双源"，但实际只 anchor 得住一个：伯克利直链 200 OK、
+# content-length 45575747 与 MODEL_BYTES 完全对得上，是验过的；
+# HuggingFace 上没找到能确认可用的同名权重仓库（HF API 在本环境不可达，
+# 编一个 URL 进去只会让人白等），所以暂不列第二源。要用备源就用
+# 环境变量 SHIFTLITE_WEIGHTS_URL 指过去，它会被排在最前面。
+MODEL_SOURCES = [
+    ("伯克利官方", "http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/"
+                   "horse2zebra.pth"),
+]
 MODEL_BYTES = 45575747
+
+
+def model_sources() -> list[tuple[str, str]]:
+    override = os.environ.get("SHIFTLITE_WEIGHTS_URL", "").strip()
+    if override:
+        return [("环境变量 SHIFTLITE_WEIGHTS_URL", override)] + MODEL_SOURCES
+    return MODEL_SOURCES
 
 # 样例图与校准集来源（按优先级尝试；mini 只有 1.8MB，几秒下完）
 DATASET_SOURCES = [
@@ -91,9 +107,21 @@ def download_model(force: bool = False) -> Path:
         _p(f"  [跳过] 权重已存在 {dst.stat().st_size/1024/1024:.1f} MB")
         return dst
     _p("  下载预训练权重（支持断点续传）…")
-    _resume_download(MODEL_URL, dst, ok)
-    _p(f"  [完成] {dst} ({dst.stat().st_size/1024/1024:.1f} MB)")
-    return dst
+    for label, url in model_sources():
+        try:
+            _p(f"  尝试 {label}…")
+            _resume_download(url, dst, ok)
+            if ok(dst):
+                _p(f"  [完成] {dst} ({dst.stat().st_size/1024/1024:.1f} MB)"
+                   f"，来源：{label}")
+                return dst
+            _p(f"  [放弃] {label} 下载不完整，换下一个源")
+        except SystemExit:
+            _p(f"  [放弃] {label} 不可用，换下一个源")
+            continue
+    raise SystemExit(
+        "权重下载失败：所有镜像都不可用。手动下载 horse2zebra.pth 放到 "
+        f"{dst} 后重跑 setup 即可（完整大小 {MODEL_BYTES/1024/1024:.1f} MB）。")
 
 
 def _zip_ok(path: Path) -> bool:
@@ -311,8 +339,17 @@ def cmd_bench(args):
     if not any(avail.values()):
         raise SystemExit("没有任何可用模型，先跑 python cli.py setup")
 
-    rng = np.random.default_rng(20261014)
-    x = rng.standard_normal((1, 3, SIZE, SIZE)).astype(np.float32)
+    # 测速输入也换成真实图像：与时延相关的是计算量，用真实分布能顺带记录
+    # 一次有代表性的输入；取不到样例图时退回固定随机输入。
+    ref = sorted(SAMPLES.glob("horse_*.png"))
+    if ref:
+        from core.utils import load_image, to_tensor
+        x = to_tensor(load_image(ref[0])).astype(np.float32)
+        input_desc = ref[0].name
+    else:
+        rng = np.random.default_rng(20261014)
+        x = rng.standard_normal((1, 3, SIZE, SIZE)).astype(np.float32)
+        input_desc = "固定随机输入"
 
     groups = []
     for gid in ["A", "B", "C"]:
@@ -341,9 +378,16 @@ def cmd_bench(args):
             "min_ms": round(float(arr.min()), 2),
             "max_ms": round(float(arr.max()), 2),
             "fps": round(1000 / mean, 2) if mean else 0,
-            "rounds": int(arr.size),
+            # rounds_total=实际计时轮次，rounds_used=丢弃 args.warmup_drop 轮
+            # 之后参与统计的轮次；两个数分开记，避免读 JSON 的人猜。
+            "rounds_total": int(len(times)),
+            "rounds_used": int(arr.size),
             "size_mb": rt.model_size_mb(gid),
-            "precision": rt.precision(gid),
+            # rt.precision() 返回的是运行时精度提示（三组都传了 f32 hint），
+            # 直接落盘会让 C 组记成 float32 —— 界面是对的、产物文件是错的。
+            # 这里按组别写真实数值格式，另用字段记录当时的提示值。
+            "precision": "int8" if gid == "C" else "fp32",
+            "inference_precision_hint": rt.precision(gid),
             "samples": [round(t, 2) for t in times],
         })
 
@@ -359,7 +403,7 @@ def cmd_bench(args):
         "device": _cpu_name(),
         "platform": f"{platform.system()} {platform.release()} / Python {platform.python_version()}",
         "protocol": {
-            "input": "1×3×256×256 float32",
+            "input": f"1×3×{SIZE}×{SIZE} float32（{input_desc}，[-1,1]）",
             "batch_size": 1,
             "warmup": args.warmup,
             "rounds": args.rounds,
@@ -400,6 +444,7 @@ def cmd_quality(args):
         raise SystemExit("样例目录里没有 horse_*.png，先跑 setup")
 
     rows = []
+    YA, YB, YC = [], [], []      # deep 模式用的批量图像
     for p in horses[:args.limit]:
         img = load_image(p)
         x = to_tensor(img)
@@ -411,6 +456,9 @@ def cmd_quality(args):
             out = to_image(arr)
             out.save(out_dir / f"{p.stem}_{g}.png")
             y[g] = np.asarray(out, dtype=np.float32)
+        for g in ("A", "B", "C"):
+            if g in y:
+                {"A": YA, "B": YB, "C": YC}[g].append(y[g].astype(np.uint8))
 
         row = {"sample": p.stem, "input": str(p.relative_to(ROOT))}
         if "A" in y and "B" in y:
@@ -439,9 +487,14 @@ def cmd_quality(args):
         vals = [r[key] for r in rows if isinstance(r.get(key), (int, float))]
         return round(float(np.mean(vals)), 6) if vals else None
 
+    deep_block = {}
+    if args.deep:
+        deep_block = _deep_metrics(YA, YB, YC, rows, out_dir, args)
+
     summary = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "n_samples": len(rows),
+        "metrics_source": "real" if deep_block else "proxy",
         "mean": {
             "ssim_ab": avg("ssim_ab"),
             "edge_ssim_ab": avg("edge_ssim_ab"),
@@ -454,9 +507,177 @@ def cmd_quality(args):
         },
         "rows": rows,
     }
+    if deep_block:
+        summary["deep"] = deep_block
     (RESULTS / "quality.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    _p(f"\n已写入 {RESULTS / 'quality.json'}")
+    _p(f"\n已写入 {RESULTS / 'quality.json'}"
+       f"（{'真实感知指标' if deep_block else '代理值，仅供联调'}）")
+
+
+def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
+    """接真实感知网络的一组指标。依赖缺失时整段跳过，不留半成品。"""
+    try:
+        from core.metrics_deep import (canny_edge_ssim, fid, inception_features,
+                                       instance_masks, kid, lpips_three_way_real,
+                                       register_anomalies, target_probabilities)
+    except ImportError as e:
+        _p(f"  [跳过] 深度指标依赖缺失：{e}")
+        return {}
+
+    import numpy as np
+
+    from core.metrics import background_ssim, mask_iou
+    from core.utils import load_image
+
+    have = dict(A=bool(YA), B=bool(YB), C=bool(YC))
+    deep: dict = {"requested": True, "groups": have}
+
+    # 1) 真实 LPIPS 三对归因
+    if all(have.values()):
+        lp = lpips_three_way_real(YA, YB, YC)
+        deep["lpips"] = {k: v for k, v in lp.items()
+                         if not k.endswith("_per_image")}
+        _p(f"  LPIPS(真实) L_ab={lp['L_ab']}  L_bc={lp['L_bc']}  "
+           f"L_ac={lp['L_ac']}")
+
+    # 2) Canny 边缘 SSIM（方案指定，替代 metrics.py 的梯度幅值版本）
+    for key, (x, y) in {"ab": (YA, YB), "bc": (YB, YC), "ac": (YA, YC)}.items():
+        if x and y:
+            vals = [canny_edge_ssim(a, b) for a, b in zip(x, y)]
+            deep[f"canny_edge_ssim_{key}"] = round(float(np.mean(vals)), 6)
+    if deep.get("canny_edge_ssim_bc") is not None:
+        _p(f"  Canny 边缘 SSIM(b,c) = {deep['canny_edge_ssim_bc']}")
+
+    # 3) FID / KID：生成批 vs 真实目标域（testB 斑马）
+    zebras = sorted(p for p in SAMPLES.iterdir()
+                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+                    and p.name.startswith("zebra"))
+    if zebras and YB:
+        ref = [np.asarray(load_image(z), dtype=np.uint8) for z in zebras]
+        try:
+            fa = inception_features(YB)
+            fb = inception_features(ref)
+            deep["fid"] = {"b_vs_real_zebra": fid(fa, fb),
+                           "n_generated": len(YB), "n_real": len(ref)}
+            deep["kid"] = kid(fa, fb, n_subsets=20,
+                              subset_size=min(50, len(YB), len(ref)))
+            _p(f"  FID(B vs 真实斑马) = {deep['fid']['b_vs_real_zebra']}  "
+               f"KID = {deep['kid']['mean']}")
+        except Exception as e:
+            _p(f"  [跳过] FID/KID：{type(e).__name__}: {str(e)[:160]}")
+    else:
+        _p("  [跳过] FID/KID：samples 里没有 zebra_*.png 作为参照集")
+
+    # 4) 掩码 IoU + 背景 SSIM（真值掩码来自 Mask R-CNN）
+    if YA and YC:
+        try:
+            m_a = instance_masks(YA)
+            m_c = instance_masks(YC)
+            ious, bgs = [], []
+            for row, ma, mc in zip(rows, m_a, m_c):
+                if ma["found"] and mc["found"]:
+                    ious.append(mask_iou(ma["mask"], mc["mask"]))
+                    row["mask_iou_ac"] = round(float(ious[-1]), 6)
+                    b = background_ssim(np.asarray(YA[rows.index(row)],
+                                                   dtype=np.float32),
+                                        np.asarray(YC[rows.index(row)],
+                                                   dtype=np.float32),
+                                        ma["mask"])
+                    bgs.append(b)
+                    row["background_ssim_ac"] = round(float(b), 6)
+                else:
+                    row["mask_iou_ac"] = None
+            deep["mask"] = {
+                "detected_pairs": len(ious),
+                "mean_iou_ac": round(float(np.mean(ious)), 6) if ious else None,
+                "mean_background_ssim_ac":
+                    round(float(np.mean(bgs)), 6) if bgs else None,
+            }
+            _p(f"  掩码 IoU(a,c) 均值 = {deep['mask']['mean_iou_ac']}"
+               f"（检出 {len(ious)}/{len(rows)} 对）")
+        except Exception as e:
+            _p(f"  [跳过] 掩码 IoU：{type(e).__name__}: {str(e)[:160]}")
+
+    # 5) 斑马判别准确率（生成结果里有多少被 ImageNet ResNet-50 判成斑马）
+    if YC:
+        try:
+            preds = target_probabilities(YC)
+            acc = float(np.mean([p["is_target"] for p in preds]))
+            deep["zebra_discrimination"] = {
+                "top1_accuracy": round(acc, 6),
+                "mean_target_prob": round(
+                    float(np.mean([p["target_prob"] for p in preds])), 6),
+                "n": len(preds),
+            }
+            _p(f"  斑马判别 top1 准确率 = {acc:.2%}")
+        except Exception as e:
+            _p(f"  [跳过] 斑马判别：{type(e).__name__}: {str(e)[:160]}")
+
+    # 6) 异常样本登记：不混进上面的均值
+    bad = [r for r in rows
+           if isinstance(r.get("ssim_bc"), float)
+           and r["ssim_bc"] < args.anomaly_threshold]
+    if bad:
+        records = []
+        for r in bad:
+            idx = rows.index(r)
+            records.append({
+                "name": r["sample"],
+                "image": YC[idx] if idx < len(YC) else None,
+                "reason": f"ssim_bc={r['ssim_bc']} "
+                          f"< 阈值 {args.anomaly_threshold}",
+                "metrics": {k: v for k, v in r.items() if k != "image"},
+            })
+        records = [r for r in records if r["image"] is not None]
+        if records:
+            p = register_anomalies(records, RESULTS / "anomalies")
+            deep["anomalies"] = {"count": len(records), "index": str(p)}
+            _p(f"  异常样例 {len(records)} 张 → {p.parent.name}/")
+    return deep
+
+def cmd_layers(args):
+    """E4 层间分工：FP32 与 NNCF 模拟 INT8 两侧的逐层表示漂移。"""
+    from core.layers import layer_report, load_images
+    from core.quantize import collect_calibration
+
+    if not (MODELS / "horse2zebra.pth").exists():
+        raise SystemExit("没有预训练权重，先跑 python cli.py setup")
+
+    if not CALIB.exists() or not any(CALIB.iterdir()):
+        raise SystemExit("校准集为空，先跑 python cli.py setup")
+    calib = collect_calibration(CALIB, args.subset)
+
+    if args.images:
+        paths = [Path(p) for p in args.images]
+    else:
+        exts = {".jpg", ".jpeg", ".png"}
+        paths = sorted(p for p in SAMPLES.iterdir()
+                       if p.suffix.lower() in exts
+                       and p.name.startswith("horse"))[:args.limit]
+    if not paths:
+        raise SystemExit("没有可用的评测图")
+
+    _p(f"  校准 {len(calib)} 张（trainA），量化侧 NNCF FakeQuantize 模拟")
+    images = load_images(paths)
+    report = layer_report(MODELS / "horse2zebra.pth", calib, images)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    (RESULTS / "layers.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    _p(f"\n{'层':<16}{'余弦':>10}{'相对L2':>10}{'平均相对误差':>14}")
+    for r in report["rows"]:
+        _p(f"{r['layer']:<16}{r['cosine']:>10.4f}{r['rel_l2']:>10.4f}"
+           f"{r['mean_rel_err']:>14.4f}")
+    s = report["summary"]
+    _p(f"\n漂移最大层：{s['most_drifted_layer']}（余弦 {s['most_drifted_cosine']}）")
+    _p(f"漂移最小层：{s['least_drifted_layer']}（余弦 {s['least_drifted_cosine']}）")
+    if s.get("resblock_cosine_head_tail"):
+        head, tail = s["resblock_cosine_head_tail"]
+        _p(f"残差块首尾余弦 {head:.4f} → {tail:.4f}"
+           f"（{'单调下降' if s['drift_monotonic_along_depth'] else '非单调'}）")
+    _p(f"已写入 {RESULTS / 'layers.json'}")
 
 
 # ---------------- serve ----------------
@@ -467,27 +688,42 @@ def cmd_serve(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="轻迁 CycleLite")
+    ap = argparse.ArgumentParser(description="ShiftLite")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("setup", help="下载模型并完成转换与量化")
     s.add_argument("--force", action="store_true")
-    s.add_argument("--accuracy-control", action="store_true")
     s.add_argument("--subset", type=int, default=CALIB_SUBSET,
                    help=f"校准集张数（方案口径 {CALIB_SUBSET} 张，取 trainA）")
+    s.add_argument("--accuracy-control", action="store_true",
+                   help="启用精度控制量化（以部分加速收益换质量）")
     s.add_argument("--keep-instance-norm", action="store_true",
                    help="不排除 InstanceNorm/MVN；用于复现量化崩溃现象，勿用于正式产物")
     s.set_defaults(func=cmd_setup)
 
     b = sub.add_parser("bench", help="A/B/C 三组性能对比")
-    b.add_argument("--rounds", type=int, default=10)
-    b.add_argument("--warmup", type=int, default=2)
+    # 12 轮计时 + 3 轮预热，丢弃计时首轮（与 README §五的口径一致）
+    b.add_argument("--rounds", type=int, default=12)
+    b.add_argument("--warmup", type=int, default=3)
     b.add_argument("--warmup-drop", type=int, default=1)
     b.set_defaults(func=cmd_bench)
 
     q = sub.add_parser("quality", help="质量与结构保真度量")
     q.add_argument("--limit", type=int, default=4)
+    q.add_argument("--deep", action="store_true",
+                   help="接入真实感知指标（LPIPS/FID/KID/Canny/掩码/判别），"
+                        "首次运行需下载预训练权重")
+    q.add_argument("--anomaly-threshold", type=float, default=0.80,
+                   help="ssim_bc 低于该值的样本登记为异常样例")
     q.set_defaults(func=cmd_quality)
+
+    ly = sub.add_parser("layers", help="E4 层间分工：逐层表示漂移分析")
+    ly.add_argument("--subset", type=int, default=CALIB_SUBSET)
+    ly.add_argument("--limit", type=int, default=6,
+                    help="参与评测的马图数量（默认用 samples 里的全部样例）")
+    ly.add_argument("--images", nargs="+", default=None,
+                    help="显式指定评测图，覆盖 --limit")
+    ly.set_defaults(func=cmd_layers)
 
     v = sub.add_parser("serve", help="启动本地可视化界面")
     v.add_argument("--host", default="127.0.0.1")

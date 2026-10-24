@@ -1,11 +1,18 @@
-# 轻迁 CycleLite 依赖
+# ShiftLite 依赖
 # torch 用 CPU 版即可：pip install torch --index-url https://download.pytorch.org/whl/cpu
 torch>=2.0
+# torchvision 要跟 torch 同源安装，否则 ABI 不匹配：
+# pip install torchvision --index-url https://download.pytorch.org/whl/cpu
 openvino>=2024.0
 nncf>=2.6
-onnx>=1.15
 numpy>=1.24
 pillow>=10.0
 
-# 可选：仅用于诊断 ONNX 导出是否与 PyTorch 一致
-# onnxruntime>=1.17
+# ---- 深度指标（python cli.py quality --deep 才需要）----
+# 首次运行会下载预训练权重（alexnet / inception_v3 / resnet50 / maskrcnn，
+# 合计约 600MB），缓存位置由 TORCH_HOME 决定。
+torchvision>=0.15
+opencv-python>=4.8    # Canny 边缘，方案指定的那版
+lpips>=0.1.4          # 真实 LPIPS，权重随包自带（weights/v0.1/alex.pth）
+
+# 注：2026-10-24 起转换链路改为 PyTorch 直转 OpenVINO IR，不再需要 onnx。

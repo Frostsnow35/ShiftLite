@@ -9,17 +9,37 @@ import numpy as np
 from PIL import Image
 
 SIZE = 256
+# 官方 CycleGAN test 的装配方式：先 resize 到 load_size，再 CenterCrop 到 crop_size。
+# 本项目默认 286 / 256，与 junyanz 仓库 test 时的 `resize_and_crop`
+# （preprocess=resize_and_crop, load_size=286, crop_size=256）一致；
+# 早前版本是"居中裁成正方形 → resize 到 256"，与官方不等价，
+# 换到完整测试集跑 FID/KID 时会带来系统性偏差。
+LOAD_SIZE = 286
+_INTERP = Image.BICUBIC
 
 
-def load_image(path: str | Path, size: int = SIZE) -> Image.Image:
-    """读图 → 居中裁剪成正方形 → 缩放到 size×size（与官方 transforms 一致）。"""
+def load_image(path: str | Path, size: int = SIZE,
+               load_size: int | None = LOAD_SIZE) -> Image.Image:
+    """读图 → 官方口径的重采样裁剪 → `size`×`size`（可用一张图跑完全流程）。
+
+    传 `load_size=None` 会退化成旧行为（居中裁正方形后直接 resize），
+    仅供对照实验使用，正式评测不这么走。
+    """
     img = Image.open(path).convert("RGB")
+
+    if load_size and load_size > size:
+        img = img.resize((load_size, load_size), _INTERP)
+        left = (load_size - size) // 2
+        top = (load_size - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        return img
+
     w, h = img.size
     side = min(w, h)
     left = (w - side) // 2
     top = (h - side) // 2
-    img = img.crop((left, top, left + side, top + side))
-    return img.resize((size, size), Image.BICUBIC)
+    return img.crop((left, top, left + side, top + side)).resize((size, size),
+                                                                _INTERP)
 
 
 def to_tensor(img: Image.Image) -> np.ndarray:

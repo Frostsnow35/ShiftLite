@@ -1,4 +1,4 @@
-# 轻迁 CycleLite
+# ShiftLite
 
 > 基于 CycleGAN 的实例对象图像迁移，与面向 Intel CPU 的轻量化推理加速。
 > 《人工智能导论》课程项目 · 华南师范大学计算机学院 · 4 人小组
@@ -28,39 +28,49 @@ pip install -r requirements.txt
 # 2. 一条命令完成：下模型 → 直转 OpenVINO IR → INT8 量化 → 拉样例图
 python cli.py setup
 
-# 3. 三组性能测速（预热 + 多轮，报均值/标准差/FPS）
-python cli.py bench --rounds 10
+# 3. 三组性能测速（12 轮计时、预热 3 轮、丢弃计时首轮，报均值/标准差/FPS）
+python cli.py bench
 
-# 4. 质量与结构保真度量
+# 4. 质量与结构保真度量（默认走纯 numpy 结构指标）
 python cli.py quality
 
-# 5. 打开可视化界面
+# 4b. 接真实感知网络（LPIPS/FID/KID/Canny/掩码/判别），首次会下约 600MB 权重
+python cli.py quality --deep
+
+# 5. E4 层间分工：逐层表示漂移
+python cli.py layers
+
+# 6. 打开可视化界面
 python cli.py serve
 #    → http://127.0.0.1:8770
 ```
 
 首次 `setup` 需要下载 45 MB 权重，网络慢时会自动续传。
+Windows 上可先 `set TORCH_HOME=E:\cache\torch`，避免 `--deep` 的权重缓存落到 C 盘。
 
 ---
 
 ## 三、目录
 
 ```
-cyclelite/
+ShiftLite-impl/
 ├── cli.py                 命令行入口（setup / bench / quality / serve）
 ├── server.py              本地可视化服务（仅标准库）
 ├── core/
 │   ├── model.py           CycleGAN ResNet 生成器（与官方结构等价）
-│   ├── convert.py         PyTorch → ONNX → OpenVINO IR + 转换正确性验证
+│   ├── convert.py         PyTorch 直转 OpenVINO IR + 转换正确性验证
 │   ├── quantize.py        NNCF 训练后量化（PTQ）
 │   ├── backends.py        A / B / C 三组推理后端
-│   ├── metrics.py         SSIM / 边缘 SSIM / 掩码 IoU / Dice
+│   ├── metrics.py         SSIM / PSNR / MAE / Dice（结构指标）
+│   ├── metrics_deep.py    LPIPS / FID / KID / 掩码 / 判别 / Canny（真实感知指标）
+│   ├── layers.py          E4 逐层表示漂移（前向钩子 + NNCF 模拟量化）
 │   └── utils.py           图像读写、预处理、计时
 ├── web/                   可视化界面（纯原生，无外部依赖）
 └── artifacts/
-    ├── models/            权重、ONNX、IR、INT8
-    ├── samples/           样例图（校准集也取自这里）
-    └── results/           benchmark.json / quality.json
+    ├── models/            权重、FP32 IR、INT8 IR
+    ├── calib/             量化校准集（trainA，与评测集隔离）+ manifest.json
+    ├── samples/           演示与评测样例图（testA / testB）
+    └── results/           benchmark.json / quality.json / layers.json
 ```
 
 ---
@@ -154,23 +164,30 @@ cyclelite/
 | PyTorch → OpenVINO IR **直转**（不经 ONNX） | ✅ 已实现，附一致性验证（灰度级判据自动比对） |
 | NNCF PTQ INT8 量化 | ✅ 已实现，默认排除 InstanceNorm（否则输出崩溃） |
 | A/B/C 三组延迟、FPS、模型体积 | ✅ 实测 |
-| SSIM / 边缘 SSIM / 掩码 IoU / Dice | ✅ 纯 numpy 实现 |
-| LPIPS 三对归因 | ⚠️ 界面显示的是**结构相似度代理值**，需接入 torchvision 才能得真实值 |
-| FID / KID | ⛔ 未接入（需 Inception 权重与完整测试集） |
-| Mask R-CNN 实例掩码 IoU | ⛔ 未接入（需 torchvision + maskrcnn 权重） |
-| ResNet-50 斑马判别准确率 | ⛔ 未接入 |
-| apple2orange 扩展迁移对 | ⛔ 未接入 |
+| SSIM / PSNR / MAE / Dice | ✅ 纯 numpy 实现 |
+| **真实 LPIPS 三对归因**（AlexNet + 官方线性权重） | ✅ `quality --deep`，走 `core/metrics_deep.lpips_three_way_real` |
+| **FID / KID**（InceptionV3 2048 维特征） | ✅ `quality --deep`，纯 numpy 求 Frechet 距离与多项式核 MMD |
+| **Mask R-CNN 实例掩码 IoU + 背景 SSIM** | ✅ `quality --deep`，COCO 权重按类名取 zebra 索引 |
+| **ResNet-50 斑马判别准确率** | ✅ `quality --deep` |
+| **Canny 边缘 SSIM**（方案指定） | ✅ `quality --deep`，此前 `metrics.edge_map` 的梯度幅值版仍保留对照 |
+| **异常样本登记** | ✅ `quality --deep` 按 `ssim_bc` 阈值落 `artifacts/results/anomalies/` |
+| E4 层间分工（逐层表示漂移） | ✅ `cli.py layers`，15 个探针层 + 逐层余弦/相对 L2 |
+| 界面默认显示的 LPIPS | ⚠️ **仍是代理值**（不带 `--deep` 时），标了 `"note": "proxy"`，不得写进报告 |
 
 界面「实验进度」页会把每一项标成 **已完成 / 部分完成 / 未开始**，不会把没做的说成做了。
 
-### 待接入项怎么补
+### 真实感知指标怎么开
 
 ```bash
-pip install torchvision          # 提供 ResNet-50 / Mask R-CNN / AlexNet 特征
+pip install -r requirements.txt      # 含 torchvision / opencv-python / lpips
+export TORCH_HOME=E:/somewhere/torch # 可选：Windows 上避免权重缓存落到 C 盘
+
+python cli.py quality --deep
 ```
 
-然后在 `core/metrics.py` 中把 `lpips_three_way` 换成基于 AlexNet 特征 + 官方线性权重的真实实现，
-并新增 `fid_kid()` 与 `mask_iou_via_maskrcnn()`。这三处是期末报告里 E3 / E5 / E6 的关键。
+首次运行会下载约 600 MB 预训练权重（alexnet / inception_v3 / resnet50 / maskrcnn），
+之后走缓存。输出落在 `artifacts/results/quality.json` 的 `deep` 字段，同时
+`metrics_source` 会标成 `"real"`（不带 `--deep` 是 `"proxy"`）。
 
 ---
 
@@ -180,7 +197,8 @@ pip install torchvision          # 提供 ResNet-50 / Mask R-CNN / AlexNet 特�
 |---|---|
 | §3.2 PoC | `cli.py setup` 中的转换正确性验证（写 `convert_report.json`） |
 | §3.3 三组对比 | `cli.py bench` → `benchmark.json` |
-| §4 评价指标 | `core/metrics.py` + 界面「质量评测」页 |
-| §6 实验 E0–E6 | 界面「实验进度」页 |
 | §3.3 量化校准集 | `core/quantize.py`，取 `artifacts/calib`（**trainA**，与评测集隔离） |
+| §4 评价指标 | `core/metrics.py`（结构指标）+ `core/metrics_deep.py`（真实感知指标）+ 界面「质量评测」页 |
+| §3 网络层间分工 | `core/layers.py` + `cli.py layers` → `layers.json` |
+| §6 实验 E0–E5 | 界面「实验进度」页 |
 | §9 风险对策 | 量化失败时 `--accuracy-control` 走精度控制量化 |

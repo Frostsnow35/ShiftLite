@@ -1,4 +1,4 @@
-/* 轻迁 CycleLite · 前端逻辑（无外部依赖） */
+/* ShiftLite · 前端逻辑（无外部依赖） */
 
 const NS = 'http://www.w3.org/2000/svg';
 const GROUP_COLOR = { A: '#64748b', B: '#2563eb', C: '#d97706' };
