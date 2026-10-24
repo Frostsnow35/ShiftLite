@@ -44,6 +44,7 @@
 - 目标：验证"PyTorch CycleGAN 生成器 → OpenVINO 转换 → INT8 量化"整条链路在本机可通。Demo、指标、层间分析全部排在其后。
 - 步骤：官方仓库脚本下载预训练模型（`./scripts/download_cyclegan_model.sh horse2zebra.pth`，伯克利直链留作文档备份）→ 转换 → 同一张输入图分别跑 PyTorch 与 OpenVINO → 检查输出图像正常、数值差异合理（输出映射到 0–255 灰度后逐像素比对；预设可忽略阈值 = 平均绝对误差 ≤ 0.5 个灰度级、最大绝对误差 ≤ 5 个灰度级，PoC 时按实测校准并记录）→ 转换后模型成功保存、重新加载、再次推理。
 - 通过标准：完成至少一次转换 + 推理 + 输出对比，并记录两种运行方式的耗时。INT8 遇阻时先解决 horse2zebra 最小样例，通过前不写 Demo。
+- **PoC 结论（2026-10-24 实测，OpenVINO 2026.4.1 / torch 2.14.1+cpu）**：`ov.convert_model(net, example_input=zero_tensor, input=[1,3,256,256])` 直转通过，无需任何中间格式。IR 规模 228 个节点 / 10 类算子，其中 `ReflectionPad2d → Pad`（20 个）、`InstanceNorm2d → MVN`（23 个）均由前端正常消化。固定随机输入下 PyTorch 与 IR 输出逐像素最大差 9e-6（≈0.0011 灰度级），远优于 §3.2 的验收阈值（≤0.5 / ≤5 灰度级）。注意：`example_input` 必须与 `input` 同时使用，只给前者会得到动态 shape 的图，影响后续编译与 NNCF 量化；只给后者则会让误差量级劣化到 1e-3 量级。
 
 ### 3.3 量化加速与可控扰动对照（工程增量）
 - 转换链路：**PyTorch → OpenVINO IR 直转**（`ov.convert_model` + `ov.save_model`，输入固定 1×3×256×256，不做动态轴，不产生 ONNX 等中间格式）。转换由示例输入驱动追踪，算子兼容性由 PoC 实测定档并记录；生成器算子（ReflectionPad2d / InstanceNorm）的兼容性列为 PoC 首查项。

@@ -239,36 +239,35 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
 
 
 def cmd_setup(args):
-    _p("== 1/5 预训练权重 ==")
+    _p("== 1/4 预训练权重 ==")
     weights = download_model(force=args.force)
 
-    _p("== 2/5 样例图与校准集 ==")
+    _p("== 2/4 样例图与校准集 ==")
     n = prepare_samples(n_calib=args.subset)
     _p(f"  样例 {n} 张")
 
-    from core.convert import export_onnx, to_openvino, verify_against_torch
+    from core.convert import build_ir, verify_against_torch
 
-    _p("== 3/5 PyTorch → ONNX ==")
-    onnx_path = MODELS / "horse2zebra.onnx"
-    if onnx_path.exists() and not args.force:
-        _p(f"  [跳过] {onnx_path.name}")
-    else:
-        export_onnx(weights, onnx_path, args.opset)
-        _p(f"  [完成] {onnx_path.name} ({onnx_path.stat().st_size/1024/1024:.1f} MB)")
-    _p("== 4/5 ONNX → OpenVINO IR ==")
+    _p("== 3/4 PyTorch 直转 OpenVINO IR（不经 ONNX）==")
     xml = MODELS / "horse2zebra.xml"
     if xml.exists() and not args.force:
         _p(f"  [跳过] {xml.name}")
     else:
-        to_openvino(onnx_path, xml)
+        build_ir(weights, xml)
         _p(f"  [完成] {xml.name}")
 
-    report = verify_against_torch(weights, xml)
-    _p(f"  转换正确性：max|Δ|={report['max_abs']}  mean|Δ|={report['mean_abs']}")
+    # 判据要用真实图像：造出来的随机输入值域约 ±3，不是真实输入分布
+    ref = sorted(SAMPLES.glob("horse_*.png"))
+    report = verify_against_torch(weights, xml, image=ref[0] if ref else None)
+    _p(f"  验证输入：{report.get('input_image') or '固定随机输入（样例图缺失）'}")
+    _p(f"  转换正确性：max|Δ|={report['max_gray']} 灰度级，"
+       f"mean|Δ|={report['mean_gray']} 灰度级"
+       f"（判据 {'通过' if report['pass'] else '未通过'}：均值≤0.5、最大≤5）")
+    _p(f"  IR 规模：{report['total_ops']} 个节点 / {report['op_kinds']} 类算子")
     (MODELS / "convert_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    _p("== 5/5 NNCF INT8 量化 ==")
+    _p("== 4/4 NNCF INT8 量化 ==")
     int8 = MODELS / "horse2zebra_int8.xml"
     if int8.exists() and not args.force:
         _p(f"  [跳过] {int8.name}")
@@ -473,7 +472,6 @@ def main():
 
     s = sub.add_parser("setup", help="下载模型并完成转换与量化")
     s.add_argument("--force", action="store_true")
-    s.add_argument("--opset", type=int, default=13)
     s.add_argument("--accuracy-control", action="store_true")
     s.add_argument("--subset", type=int, default=CALIB_SUBSET,
                    help=f"校准集张数（方案口径 {CALIB_SUBSET} 张，取 trainA）")

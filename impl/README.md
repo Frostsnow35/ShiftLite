@@ -25,7 +25,7 @@
 # 1. 装依赖（CPU 版 torch，约 250MB）
 pip install -r requirements.txt
 
-# 2. 一条命令完成：下模型 → 转 ONNX → 转 OpenVINO IR → INT8 量化 → 拉样例图
+# 2. 一条命令完成：下模型 → 直转 OpenVINO IR → INT8 量化 → 拉样例图
 python cli.py setup
 
 # 3. 三组性能测速（预热 + 多轮，报均值/标准差/FPS）
@@ -151,7 +151,7 @@ cyclelite/
 | 能力 | 状态 |
 |---|---|
 | CycleGAN 生成器结构 + 官方权重加载 | ✅ 已实现 |
-| PyTorch → ONNX → OpenVINO IR 转换 | ✅ 已实现，附一致性验证 |
+| PyTorch → OpenVINO IR **直转**（不经 ONNX） | ✅ 已实现，附一致性验证（灰度级判据自动比对） |
 | NNCF PTQ INT8 量化 | ✅ 已实现，默认排除 InstanceNorm（否则输出崩溃） |
 | A/B/C 三组延迟、FPS、模型体积 | ✅ 实测 |
 | SSIM / 边缘 SSIM / 掩码 IoU / Dice | ✅ 纯 numpy 实现 |
