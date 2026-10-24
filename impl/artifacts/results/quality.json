@@ -1,15 +1,16 @@
 {
-  "generated_at": "2026-10-23 11:01:17",
+  "generated_at": "2026-10-24 17:09:56",
   "n_samples": 6,
+  "metrics_source": "real",
   "mean": {
     "ssim_ab": 1.0,
     "edge_ssim_ab": 1.0,
-    "psnr_ab": 88.168333,
-    "ssim_bc": 0.916021,
-    "edge_ssim_bc": 0.831354,
-    "psnr_bc": 29.276667,
-    "ssim_ac": 0.916022,
-    "edge_ssim_ac": 0.831355
+    "psnr_ab": 88.618333,
+    "ssim_bc": 0.912876,
+    "edge_ssim_bc": 0.831443,
+    "psnr_bc": 28.773333,
+    "ssim_ac": 0.912875,
+    "edge_ssim_ac": 0.831443
   },
   "rows": [
     {
@@ -18,39 +19,43 @@
       "ssim_ab": 1.0,
       "edge_ssim_ab": 1.0,
       "mae_ab": 0.0001,
-      "psnr_ab": 86.92,
-      "ssim_bc": 0.935903,
-      "edge_ssim_bc": 0.872638,
-      "mae_bc": 6.9073,
-      "psnr_bc": 28.68,
-      "ssim_ac": 0.935903,
-      "edge_ssim_ac": 0.872638,
+      "psnr_ab": 87.26,
+      "ssim_bc": 0.92293,
+      "edge_ssim_bc": 0.848295,
+      "mae_bc": 7.9059,
+      "psnr_bc": 27.64,
+      "ssim_ac": 0.922929,
+      "edge_ssim_ac": 0.848294,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.09573,
-        "L_ac": 0.09573,
+        "L_bc": 0.114387,
+        "L_ac": 0.114389,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": 0.921837,
+      "background_ssim_ac": 0.934128
     },
     {
       "sample": "horse_02",
       "input": "artifacts\\samples\\horse_02.png",
       "ssim_ab": 1.0,
-      "edge_ssim_ab": 0.999999,
-      "mae_ab": 0.0001,
-      "psnr_ab": 89.31,
-      "ssim_bc": 0.919767,
-      "edge_ssim_bc": 0.834254,
-      "mae_bc": 5.7453,
-      "psnr_bc": 30.03,
-      "ssim_ac": 0.919768,
-      "edge_ssim_ac": 0.834256,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0,
+      "psnr_ab": 94.08,
+      "ssim_bc": 0.922247,
+      "edge_ssim_bc": 0.847177,
+      "mae_bc": 5.9796,
+      "psnr_bc": 29.75,
+      "ssim_ac": 0.922247,
+      "edge_ssim_ac": 0.847177,
       "lpips": {
-        "L_ab": 1e-06,
-        "L_bc": 0.122989,
-        "L_ac": 0.122988,
+        "L_ab": 0.0,
+        "L_bc": 0.115288,
+        "L_ac": 0.115288,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": 0.702028,
+      "background_ssim_ac": 0.945216
     },
     {
       "sample": "horse_03",
@@ -58,19 +63,21 @@
       "ssim_ab": 1.0,
       "edge_ssim_ab": 1.0,
       "mae_ab": 0.0001,
-      "psnr_ab": 87.84,
-      "ssim_bc": 0.920628,
-      "edge_ssim_bc": 0.834958,
-      "mae_bc": 7.6388,
-      "psnr_bc": 28.05,
-      "ssim_ac": 0.920628,
-      "edge_ssim_ac": 0.834958,
+      "psnr_ab": 87.26,
+      "ssim_bc": 0.913748,
+      "edge_ssim_bc": 0.834136,
+      "mae_bc": 7.9231,
+      "psnr_bc": 27.74,
+      "ssim_ac": 0.913747,
+      "edge_ssim_ac": 0.834135,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.122207,
-        "L_ac": 0.122207,
+        "L_bc": 0.126058,
+        "L_ac": 0.126059,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": 0.962445,
+      "background_ssim_ac": 0.918974
     },
     {
       "sample": "horse_04",
@@ -78,19 +85,20 @@
       "ssim_ab": 1.0,
       "edge_ssim_ab": 1.0,
       "mae_ab": 0.0001,
-      "psnr_ab": 90.28,
-      "ssim_bc": 0.897419,
-      "edge_ssim_bc": 0.772584,
-      "mae_bc": 5.3297,
-      "psnr_bc": 30.75,
-      "ssim_ac": 0.897418,
-      "edge_ssim_ac": 0.772584,
+      "psnr_ab": 89.61,
+      "ssim_bc": 0.896892,
+      "edge_ssim_bc": 0.784469,
+      "mae_bc": 5.3975,
+      "psnr_bc": 30.67,
+      "ssim_ac": 0.896892,
+      "edge_ssim_ac": 0.784468,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.164999,
-        "L_ac": 0.164999,
+        "L_bc": 0.15932,
+        "L_ac": 0.15932,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": null
     },
     {
       "sample": "horse_05",
@@ -98,39 +106,83 @@
       "ssim_ab": 1.0,
       "edge_ssim_ab": 1.0,
       "mae_ab": 0.0001,
-      "psnr_ab": 88.51,
-      "ssim_bc": 0.916967,
-      "edge_ssim_bc": 0.84617,
-      "mae_bc": 6.6648,
-      "psnr_bc": 29.24,
-      "ssim_ac": 0.916967,
-      "edge_ssim_ac": 0.846171,
+      "psnr_ab": 86.75,
+      "ssim_bc": 0.914336,
+      "edge_ssim_bc": 0.835157,
+      "mae_bc": 7.5413,
+      "psnr_bc": 28.18,
+      "ssim_ac": 0.914335,
+      "edge_ssim_ac": 0.835157,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.118432,
-        "L_ac": 0.118431,
+        "L_bc": 0.125253,
+        "L_ac": 0.125254,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": 0.728436,
+      "background_ssim_ac": 0.923501
     },
     {
       "sample": "horse_06",
       "input": "artifacts\\samples\\horse_06.png",
       "ssim_ab": 1.0,
       "edge_ssim_ab": 1.0,
-      "mae_ab": 0.0002,
-      "psnr_ab": 86.15,
-      "ssim_bc": 0.905445,
-      "edge_ssim_bc": 0.827521,
-      "mae_bc": 6.8578,
-      "psnr_bc": 28.91,
-      "ssim_ac": 0.905446,
-      "edge_ssim_ac": 0.827523,
+      "mae_ab": 0.0001,
+      "psnr_ab": 86.75,
+      "ssim_bc": 0.907102,
+      "edge_ssim_bc": 0.839427,
+      "mae_bc": 7.0755,
+      "psnr_bc": 28.66,
+      "ssim_ac": 0.907101,
+      "edge_ssim_ac": 0.839425,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.133517,
-        "L_ac": 0.133516,
+        "L_bc": 0.126736,
+        "L_ac": 0.126737,
         "note": "proxy"
-      }
+      },
+      "mask_iou_ac": 0.964595,
+      "background_ssim_ac": 0.921257
     }
-  ]
+  ],
+  "deep": {
+    "requested": true,
+    "groups": {
+      "A": true,
+      "B": true,
+      "C": true
+    },
+    "lpips": {
+      "net": "alex",
+      "n_images": 6,
+      "L_ab": 0.0,
+      "L_bc": 0.065859,
+      "L_ac": 0.065859
+    },
+    "canny_edge_ssim_ab": 0.999983,
+    "canny_edge_ssim_bc": 0.647902,
+    "canny_edge_ssim_ac": 0.647919,
+    "fid": {
+      "b_vs_real_zebra": 232.5631,
+      "n_generated": 6,
+      "n_real": 3
+    },
+    "kid": {
+      "mean": 0.048351,
+      "std": 0.023424,
+      "degree": 3,
+      "subset_size": 3,
+      "n_subsets": 20
+    },
+    "mask": {
+      "detected_pairs": 5,
+      "mean_iou_ac": 0.855868,
+      "mean_background_ssim_ac": 0.928615
+    },
+    "zebra_discrimination": {
+      "top1_accuracy": 0.666667,
+      "mean_target_prob": 0.669942,
+      "n": 6
+    }
+  }
 }
