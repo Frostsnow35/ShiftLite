@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-24 17:09:56",
+  "generated_at": "2026-10-24 19:33:18",
   "n_samples": 6,
   "metrics_source": "real",
   "mean": {
@@ -28,9 +28,9 @@
       "edge_ssim_ac": 0.848294,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.114387,
-        "L_ac": 0.114389,
-        "note": "proxy"
+        "L_bc": 0.042136,
+        "L_ac": 0.042137,
+        "note": "real"
       },
       "mask_iou_ac": 0.921837,
       "background_ssim_ac": 0.934128
@@ -50,9 +50,9 @@
       "edge_ssim_ac": 0.847177,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.115288,
-        "L_ac": 0.115288,
-        "note": "proxy"
+        "L_bc": 0.049237,
+        "L_ac": 0.049237,
+        "note": "real"
       },
       "mask_iou_ac": 0.702028,
       "background_ssim_ac": 0.945216
@@ -72,9 +72,9 @@
       "edge_ssim_ac": 0.834135,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.126058,
-        "L_ac": 0.126059,
-        "note": "proxy"
+        "L_bc": 0.057734,
+        "L_ac": 0.057734,
+        "note": "real"
       },
       "mask_iou_ac": 0.962445,
       "background_ssim_ac": 0.918974
@@ -94,9 +94,9 @@
       "edge_ssim_ac": 0.784468,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.15932,
-        "L_ac": 0.15932,
-        "note": "proxy"
+        "L_bc": 0.119174,
+        "L_ac": 0.119172,
+        "note": "real"
       },
       "mask_iou_ac": null
     },
@@ -115,9 +115,9 @@
       "edge_ssim_ac": 0.835157,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.125253,
-        "L_ac": 0.125254,
-        "note": "proxy"
+        "L_bc": 0.083223,
+        "L_ac": 0.083223,
+        "note": "real"
       },
       "mask_iou_ac": 0.728436,
       "background_ssim_ac": 0.923501
@@ -137,9 +137,9 @@
       "edge_ssim_ac": 0.839425,
       "lpips": {
         "L_ab": 0.0,
-        "L_bc": 0.126736,
-        "L_ac": 0.126737,
-        "note": "proxy"
+        "L_bc": 0.043651,
+        "L_ac": 0.04365,
+        "note": "real"
       },
       "mask_iou_ac": 0.964595,
       "background_ssim_ac": 0.921257
@@ -183,6 +183,11 @@
       "top1_accuracy": 0.666667,
       "mean_target_prob": 0.669942,
       "n": 6
+    },
+    "anomalies": {
+      "count": 0,
+      "index": null,
+      "threshold": 0.8
     }
   }
 }

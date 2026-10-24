@@ -147,11 +147,11 @@ def psnr(a: np.ndarray, b: np.ndarray, data_range: float = 255.0) -> float:
 
 
 def lpips_three_way(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> dict:
-    """LPIPS 三对归因的**占位实现**。
+    """LPIPS 三对归因的**占位实现**（代理值）。
 
-    真正的 LPIPS 需要感知网络权重，本环境未安装 torchvision，故此处
-    用「结构相似度 + 边缘相似度」的线性组合做近似，**仅供界面联调**，
-    正式报告中的数字必须来自 core/metrics_deep.py（真实 LPIPS）。
+    用「结构相似度 + 边缘相似度」的线性组合做近似，**仅供界面联调**；
+    真实 LPIPS 在 core/metrics_deep.py（`cli.py quality --deep`），
+    正式报告中的数字必须来自那边，本函数的输出不得写进报告。
     """
     def pair(x, y):
         s = (ssim(x, y) + edge_ssim(x, y)) / 2

@@ -158,7 +158,7 @@
           <li><b>a→b（转换差异）</b> 应≈0；偏大说明转换有 bug，不是量化的锅</li>
           <li><b>b→c（量化差异）</b> 核心指标，量化本身引入的损失</li>
           <li><b>a→c（总差异）</b> 原版到终版，应约等于前两项之和</li>
-          <li class="muted-note">当前数值为 1 − SSIM 的代理值；接入感知网络后替换为真实 LPIPS</li>
+          <li class="muted-note">quality.json 含 deep 字段时为真实 LPIPS（越小越相似）；否则为 1 − SSIM 结构差异代理值，不可写进报告</li>
         </ul>
       </section>
 

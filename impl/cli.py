@@ -538,6 +538,15 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
         lp = lpips_three_way_real(YA, YB, YC)
         deep["lpips"] = {k: v for k, v in lp.items()
                          if not k.endswith("_per_image")}
+        # 真实值覆盖 rows 里的代理 LPIPS，避免同一份 JSON 里两套口径
+        for i, r in enumerate(rows):
+            if i < len(YA):
+                r["lpips"] = {
+                    "L_ab": round(float(lp["L_ab_per_image"][i]), 6),
+                    "L_bc": round(float(lp["L_bc_per_image"][i]), 6),
+                    "L_ac": round(float(lp["L_ac_per_image"][i]), 6),
+                    "note": "real",
+                }
         _p(f"  LPIPS(真实) L_ab={lp['L_ab']}  L_bc={lp['L_bc']}  "
            f"L_ac={lp['L_ac']}")
 
@@ -614,7 +623,7 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
         except Exception as e:
             _p(f"  [跳过] 斑马判别：{type(e).__name__}: {str(e)[:160]}")
 
-    # 6) 异常样本登记：不混进上面的均值
+    # 6) 异常样本登记：不混进上面的均值；0 例也落盘，便于进度页区分"查过没问题/没查"
     bad = [r for r in rows
            if isinstance(r.get("ssim_bc"), float)
            and r["ssim_bc"] < args.anomaly_threshold]
@@ -632,8 +641,16 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
         records = [r for r in records if r["image"] is not None]
         if records:
             p = register_anomalies(records, RESULTS / "anomalies")
-            deep["anomalies"] = {"count": len(records), "index": str(p)}
+            deep["anomalies"] = {"count": len(records), "index": str(p),
+                                 "threshold": args.anomaly_threshold}
             _p(f"  异常样例 {len(records)} 张 → {p.parent.name}/")
+        else:
+            deep["anomalies"] = {"count": 0, "index": None,
+                                 "threshold": args.anomaly_threshold}
+    else:
+        deep["anomalies"] = {"count": 0, "index": None,
+                             "threshold": args.anomaly_threshold}
+        _p(f"  异常样例 0 张（ssim_bc 均 ≥ {args.anomaly_threshold}）")
     return deep
 
 def cmd_layers(args):

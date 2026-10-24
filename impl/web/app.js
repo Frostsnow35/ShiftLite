@@ -523,17 +523,30 @@ function renderQuality() {
     return;
   }
 
-  notice.className = 'notice';
-  notice.innerHTML = `<b>口径说明</b>：这里的 SSIM / 边缘 SSIM 是真实计算结果（纯 numpy）。` +
-    `LPIPS / FID / KID 需要感知网络权重，当前环境未安装 torchvision，` +
-    `<b>表中 LPIPS 为结构相似度代理值，仅供界面联调，不可写进报告</b>。`;
-
   const m = q.mean || {};
-  lpipsBars($('lpipsChart'), [
-    { label: '转换差异 a→b', value: m.ssim_ab != null ? 1 - m.ssim_ab : null, color: '#94a3b8' },
-    { label: '量化差异 b→c', value: m.ssim_bc != null ? 1 - m.ssim_bc : null, color: '#d97706' },
-    { label: '总差异 a→c', value: m.ssim_ac != null ? 1 - m.ssim_ac : null, color: '#334155' },
-  ]);
+  const deep = q.deep || {};
+  const real = q.metrics_source === 'real' && deep.lpips;
+
+  notice.className = 'notice';
+  if (real) {
+    notice.innerHTML = `<b>口径说明</b>：SSIM / 边缘 SSIM 为纯 numpy 真实计算；` +
+      `LPIPS 为官方 AlexNet 真实感知距离（<b>可用，已写进 quality.json 的 deep 字段</b>）。` +
+      `LPIPS 越小越相似，三对归因见下图。`;
+    lpipsBars($('lpipsChart'), [
+      { label: 'LPIPS a→b 转换', value: deep.lpips.L_ab, color: '#94a3b8' },
+      { label: 'LPIPS b→c 量化', value: deep.lpips.L_bc, color: '#d97706' },
+      { label: 'LPIPS a→c 总计', value: deep.lpips.L_ac, color: '#334155' },
+    ]);
+  } else {
+    notice.innerHTML = `<b>口径说明</b>：这里的 SSIM / 边缘 SSIM 是真实计算结果（纯 numpy）。` +
+      `下图为 <b>1 − SSIM 的结构差异代理值</b>（不是 LPIPS），仅供界面联调；` +
+      `跑 <b>python cli.py quality --deep</b> 可得真实 LPIPS / FID / KID。`;
+    lpipsBars($('lpipsChart'), [
+      { label: '结构差异 a→b', value: m.ssim_ab != null ? 1 - m.ssim_ab : null, color: '#94a3b8' },
+      { label: '结构差异 b→c', value: m.ssim_bc != null ? 1 - m.ssim_bc : null, color: '#d97706' },
+      { label: '结构差异 a→c', value: m.ssim_ac != null ? 1 - m.ssim_ac : null, color: '#334155' },
+    ]);
+  }
 
   structBars($('structChart'), [
     { label: 'SSIM (a vs b)', value: m.ssim_ab, color: '#2563eb' },
@@ -653,11 +666,13 @@ function renderExperiments() {
 function renderHonesty() {
   const box = $('honestyBox');
   box.innerHTML = '';
+  const deep = (STATE.quality && STATE.quality.deep) || {};
   const rows = [
-    ['✅', '真实实测', 'A/B/C 三组推理、延迟与 FPS、模型体积、SSIM 与边缘 SSIM —— 全部由本机真实计算。'],
-    ['⚠️', '代理指标', 'LPIPS / FID / KID 需要感知网络权重，当前未安装 torchvision，界面中的 LPIPS 为结构相似度代理值。'],
-    ['⛔', '尚未接入', 'Mask R-CNN 实例掩码 IoU、ResNet-50 斑马判别、apple2orange 迁移对 —— 代码位置已预留。'],
-    ['📌', '必须写进口径', 'FID/KID 衡量的是与真实目标域的特征分布距离，不等于「逼真度」；多接一对只说明系统兼容，不说明模型通用。'],
+    ['✅', '真实实测', 'A/B/C 三组推理、延迟与 FPS、模型体积、SSIM / 边缘 SSIM / PSNR、Canny 边缘 SSIM —— 全部由本机真实计算。'],
+    deep.lpips
+      ? ['✅', '真实感知指标', 'LPIPS（AlexNet）三对归因、FID / KID、Mask R-CNN 掩码 IoU、ResNet-50 斑马判别 —— `quality --deep` 已跑通，数值在 quality.json 的 deep 字段。']
+      : ['⚠️', '感知指标待跑', 'LPIPS / FID / KID / 掩码 / 判别的代码已接入（`python cli.py quality --deep`），当前 quality.json 还是结构代理值，不可写进报告。'],
+    ['📌', '必须写进口径', 'FID/KID 衡量的是与真实目标域的特征分布距离，不等于「逼真度」；加速比强平台依赖（见 README §五双平台数据），引用必须标注测试平台。'],
   ];
   rows.forEach(([mark, title, text]) => {
     box.append(el('div', { class: 'honesty-row' }, [
