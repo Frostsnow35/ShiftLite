@@ -88,7 +88,8 @@ def build_state() -> dict:
             g["precision"] = "int8（未量化层保持 f32）"
         groups.append(g)
 
-    experiments = _experiments(conv, quant, bench, quality, avail)
+    layers = _read_json(RESULTS / "layers.json")
+    experiments = _experiments(conv, quant, bench, quality, avail, layers=layers)
 
     return {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -100,11 +101,12 @@ def build_state() -> dict:
         "convert_report": conv,
         "quantize_report": quant,
         "quality": quality,
+        "layers": layers,
         "experiments": experiments,
     }
 
 
-def _experiments(conv, quant, bench, quality, avail) -> list[dict]:
+def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
 
     apple2orange 扩展已按收敛决定取消，不再占用编号；任务型斑马判别与结构/背景
@@ -114,7 +116,7 @@ def _experiments(conv, quant, bench, quality, avail) -> list[dict]:
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
-    deep_layer = _read_json(RESULTS / "layers.json")
+    deep_layer = layers if layers is not None else _read_json(RESULTS / "layers.json")
     quality = quality or {}
     q_deep = quality.get("deep") or {}
     q_real = quality.get("metrics_source") == "real"

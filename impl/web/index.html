@@ -4,200 +4,302 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ShiftLite · 实例迁移推理加速实验台</title>
+<meta name="description" content="基于 CycleGAN 的实例对象图像迁移：同一份权重在 PyTorch / OpenVINO FP32 / OpenVINO INT8 三组 CPU 环境下的推理对照实验台。">
 <link rel="stylesheet" href="/web/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦓</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='86'>🦓</text></svg>">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <div class="logo">ShiftLite</div>
-    <div class="brand-text">
-      <h1>ShiftLite · 实例迁移推理加速实验台</h1>
-      <p>基于 CycleGAN 的马 → 斑马迁移，与 A/B/C 三组 CPU 推理加速对比</p>
+<header class="masthead">
+  <div class="masthead__bar">
+    <div class="brand">
+      <span class="brand__mark">ShiftLite</span>
+      <span class="brand__rule" aria-hidden="true"></span>
+      <div class="brand__meta">
+        <h1>实例迁移推理加速实验台</h1>
+        <p>CycleGAN 同一份权重 · A / B / C 三组 CPU 运行环境对照</p>
+      </div>
+    </div>
+    <div class="masthead__meta">
+      <span class="chip" id="deviceChip">检测设备中…</span>
+      <span class="chip is-bad" id="statusChip"><i></i>连接中</span>
     </div>
   </div>
-  <div class="env">
-    <span class="chip" id="deviceChip">检测设备中…</span>
-    <span class="chip status" id="statusChip"><i></i>连接中</span>
-  </div>
+
+  <nav class="tabbar" role="tablist" aria-label="实验模块导航">
+    <button class="tab" role="tab" id="tab-demo" aria-controls="page-demo" aria-selected="true"
+            data-panel="demo" tabindex="0">
+      <span class="tab__idx">01</span><span class="tab__label">迁移演示</span>
+    </button>
+    <button class="tab" role="tab" id="tab-perf" aria-controls="page-perf" aria-selected="false"
+            data-panel="perf" tabindex="-1">
+      <span class="tab__idx">02</span><span class="tab__label">三组性能</span>
+    </button>
+    <button class="tab" role="tab" id="tab-quality" aria-controls="page-quality" aria-selected="false"
+            data-panel="quality" tabindex="-1">
+      <span class="tab__idx">03</span><span class="tab__label">质量评测</span>
+    </button>
+    <button class="tab" role="tab" id="tab-plan" aria-controls="page-plan" aria-selected="false"
+            data-panel="plan" tabindex="-1">
+      <span class="tab__idx">04</span><span class="tab__label">实验进度</span>
+    </button>
+    <span class="tabbar__indicator" id="tabIndicator" aria-hidden="true"></span>
+  </nav>
 </header>
 
-<nav class="tabs" id="tabs">
-  <button class="tab active" data-panel="demo">迁移演示</button>
-  <button class="tab" data-panel="perf">三组性能</button>
-  <button class="tab" data-panel="quality">质量评测</button>
-  <button class="tab" data-panel="plan">实验进度</button>
-</nav>
+<main class="shell">
 
-<main>
+  <!-- ══════════ 01 迁移演示 ══════════ -->
+  <section class="page is-active" id="page-demo" role="tabpanel" aria-labelledby="tab-demo" tabindex="0">
+    <header class="page__head">
+      <p class="eyebrow">Demo · 单次交互</p>
+      <h2 class="page__title">迁移演示</h2>
+      <p class="page__lede">选一张图、选一个推理后端，出图并给出本轮即时耗时。A / B / C 三组共用同一份预训练权重，
+        差别只来自运行环境与数值精度：A 是原生 PyTorch 基线，B 只换推理引擎，C 在 B 的基础上压到 INT8。</p>
+    </header>
 
-  <!-- ══════════ 迁移演示 ══════════ -->
-  <section class="panel-page active" id="page-demo">
-    <div class="demo-grid">
-
-      <aside class="card controls">
-        <div class="step">
-          <h2><span class="num">1</span>选择输入</h2>
-          <div class="samples" id="samples"></div>
-          <label class="upload" id="uploadLabel">
+    <div class="layout-demo">
+      <aside class="rail">
+        <section class="step">
+          <h3 class="step__title"><span class="step__num" aria-hidden="true">1</span>选择输入</h3>
+          <div class="samples" id="samples" role="radiogroup" aria-label="内置样例"></div>
+          <label class="dropzone" id="uploadLabel">
             <input type="file" id="fileInput" accept="image/*" hidden>
-            <span class="up-icon">↑</span>
+            <span class="up-icon" aria-hidden="true">↑</span>
             <span>上传自己的图片</span>
-            <small>支持 jpg / png，自动居中裁成正方形</small>
+            <small>支持拖拽；自动居中裁成正方形</small>
           </label>
-        </div>
+        </section>
 
-        <div class="step">
-          <h2><span class="num">2</span>选择推理后端</h2>
-          <div class="segments" id="groupSegments"></div>
-          <p class="hint" id="groupHint">A 组是基线，B、C 分别隔离「换引擎」与「压精度」的收益。</p>
-        </div>
+        <section class="step">
+          <h3 class="step__title"><span class="step__num" aria-hidden="true">2</span>选择推理后端</h3>
+          <div class="segments" id="groupSegments" role="radiogroup" aria-label="推理后端"></div>
+          <p class="hint" id="groupHint">A 组是基线，B、C 分别隔离「换引擎」与「压精度」两项收益。</p>
+        </section>
 
-        <button class="primary" id="runBtn" disabled>开始迁移</button>
-        <p class="foot-note" id="runNote"></p>
+        <button class="btn btn--primary" id="runBtn" disabled>开始迁移</button>
+        <p class="note" id="runNote" role="status" aria-live="polite"></p>
       </aside>
 
-      <section class="card viewer">
-        <div class="viewer-head">
-          <div class="viewer-title">
-            <h2>迁移结果</h2>
+      <section class="viewer" aria-label="迁移结果查看器">
+        <div class="viewer__head">
+          <div class="viewer__title">
+            <h3>迁移结果</h3>
             <span class="badge" id="viewerBadge">等待运行</span>
           </div>
-          <div class="viewer-tools">
-            <button class="ghost active" data-mode="side">并排</button>
-            <button class="ghost" data-mode="slide">叠加滑动</button>
+          <div class="segtool" role="group" aria-label="查看模式">
+            <button class="chip-btn is-active" data-mode="side" aria-pressed="true">并排</button>
+            <button class="chip-btn" data-mode="slide" aria-pressed="false">叠加</button>
+            <button class="chip-btn" data-mode="diff" aria-pressed="false">差异</button>
+          </div>
+          <div class="segtool" role="group" aria-label="辅助工具">
+            <button class="chip-btn" data-tool="loupe" aria-pressed="false">放大镜</button>
+            <button class="chip-btn" data-tool="grid" aria-pressed="false">网格</button>
           </div>
         </div>
 
-        <div class="stage" id="stage">
-          <div class="stage-empty" id="stageEmpty">
-            <div class="empty-art">🐎 → 🦓</div>
+        <div class="stage" id="stage" data-mode="side" data-has="0">
+          <div class="stage__empty" id="stageEmpty">
+            <div class="art" aria-hidden="true">🐎 → 🦓</div>
             <p>选一张马的照片，点「开始迁移」</p>
-            <small>左侧的样例图可以直接点</small>
+            <small>左侧样例可直接点；出图后支持并排、叠加滑动与差异热力图三种看法</small>
           </div>
 
-          <div class="compare side" id="compare">
+          <div class="compare" id="compare">
             <figure class="pane">
-              <img id="imgIn" alt="输入">
+              <img id="imgIn" alt="输入图像">
               <figcaption>输入</figcaption>
             </figure>
             <figure class="pane">
-              <img id="imgOut" alt="输出">
+              <img id="imgOut" alt="迁移输出">
               <figcaption id="capOut">输出 · A 组</figcaption>
             </figure>
           </div>
 
-          <div class="slider-wrap" id="sliderWrap">
-            <img id="slideIn" alt="输入">
-            <img id="slideOut" alt="输出">
-            <div class="slide-handle" id="slideHandle"></div>
-            <input type="range" min="0" max="100" value="50" id="slideRange">
+          <div class="wipe" id="wipe">
+            <img id="slideIn" alt="输入侧">
+            <img id="slideOut" alt="输出侧">
+            <span class="wipe__label wipe__label--in">输入</span>
+            <span class="wipe__label wipe__label--out" id="wipeOutLabel">输出 · A</span>
+            <span class="wipe__handle" id="slideHandle" aria-hidden="true"></span>
+            <input type="range" min="0" max="100" value="50" id="slideRange" aria-label="叠加分界线位置">
           </div>
 
-          <div class="stage-loading" id="stageLoading">
-            <div class="spinner"></div>
-            <p>正在推理…</p>
+          <div class="diffmap" id="diffMap">
+            <canvas id="diffCanvas" width="256" height="256"
+                    aria-label="输入与输出的逐像素差值热力图"></canvas>
+            <div class="diffmap__legend">
+              <span>Δ 低</span>
+              <span class="diffmap__bar" aria-hidden="true"></span>
+              <span>Δ 高</span>
+              <span id="diffStat" class="mono"></span>
+            </div>
+          </div>
+
+          <div class="gridlines" id="gridlines" aria-hidden="true"></div>
+          <div class="loupe" id="loupeIn" aria-hidden="true" data-label="输入 2.6×"></div>
+          <div class="loupe" id="loupeOut" aria-hidden="true" data-label="输出 2.6×"></div>
+
+          <div class="stage__loading" id="stageLoading" role="status" aria-live="polite">
+            <div class="progress" aria-hidden="true"></div>
+            <p class="phase" id="phaseText">正在请求服务端推理…</p>
+            <span class="elapsed" id="elapsed">0.00 s</span>
+            <p class="fine">服务端为单线程推理，界面在计算期间保持响应</p>
           </div>
         </div>
 
-        <div class="live-metrics" id="liveMetrics">
-          <div class="lm"><span class="lm-k">单图延迟</span><span class="lm-v" id="lmLatency">—</span></div>
-          <div class="lm"><span class="lm-k">实时 FPS</span><span class="lm-v" id="lmFps">—</span></div>
-          <div class="lm"><span class="lm-k">运行后端</span><span class="lm-v" id="lmGroup">—</span></div>
-          <div class="lm"><span class="lm-k">输出尺寸</span><span class="lm-v" id="lmSize">—</span></div>
-        </div>
-        <p class="live-note">这里是单次交互的即时耗时，会受后台程序影响；正式的三组对比请到「三组性能」页看多轮测速结果。</p>
+        <dl class="metrics" id="liveMetrics">
+          <div><dt>单图延迟</dt><dd id="lmLatency">—</dd></div>
+          <div><dt>实时 FPS</dt><dd id="lmFps">—</dd></div>
+          <div><dt>运行后端</dt><dd id="lmGroup">—</dd></div>
+          <div><dt>输出尺寸</dt><dd id="lmSize">—</dd></div>
+        </dl>
+        <p class="fineprint">这里是单次交互的即时耗时，受后台负载与首次惰性初始化影响；
+          正式结论以「三组性能」页的多轮测速为准。</p>
+
+        <section class="runs">
+          <h4 class="runs__title">本次会话运行记录</h4>
+          <ol class="runs__list" id="runHistory"></ol>
+          <p class="runs__empty" id="runsEmpty">还没有运行记录。跑一次推理会出现在这里，点击可回看该次结果。</p>
+        </section>
       </section>
     </div>
   </section>
 
-  <!-- ══════════ 三组性能 ══════════ -->
-  <section class="panel-page" id="page-perf">
-    <div class="kpi-row" id="kpiRow"></div>
+  <!-- ══════════ 02 三组性能 ══════════ -->
+  <section class="page" id="page-perf" role="tabpanel" aria-labelledby="tab-perf" tabindex="0">
+    <header class="page__head">
+      <p class="eyebrow">E2 · 多轮测速</p>
+      <h2 class="page__title">三组性能</h2>
+      <p class="page__lede">同一张 256×256 输入、同一批次规模下的多轮计时结果，取均值与标准差。
+        延迟与加速比强平台依赖，引用时必须写明测试平台。</p>
+    </header>
 
-    <div class="two-col">
-      <section class="card chart-card">
-        <div class="card-head">
-          <h2>单图延迟对比</h2>
-          <span class="sub" id="latencySub">含误差棒（均值 ± 标准差）</span>
+    <ul class="tiles" id="kpiRow"></ul>
+
+    <div class="grid grid--2">
+      <section class="panel">
+        <div class="panel__head">
+          <h3>单图延迟对比</h3>
+          <span class="sub">含误差棒（均值 ± 标准差）</span>
+          <button class="info-btn" data-note="note-latency" aria-expanded="false" aria-label="延迟口径说明">i</button>
         </div>
         <div class="chart" id="latencyChart"></div>
+        <p class="panel__note" id="note-latency" hidden>
+          <b>口径</b>：柱高为多轮推理延迟的均值，误差棒为 ±1 标准差；不计入模型加载与首次惰性初始化
+          （预热 3 轮后才开始计时）。<b>注意</b>：实测显示该组数字强平台依赖——同一模型在 AMD 与 Intel 平台上的
+          相对次序不一致，引用任何加速比都要带平台标注。
+        </p>
       </section>
 
-      <section class="card chart-card">
-        <div class="card-head">
-          <h2>模型体积对比</h2>
+      <section class="panel">
+        <div class="panel__head">
+          <h3>模型体积对比</h3>
           <span class="sub">INT8 目标：压到 FP32 的约 1/4</span>
+          <button class="info-btn" data-note="note-size" aria-expanded="false" aria-label="体积口径说明">i</button>
         </div>
         <div class="chart" id="sizeChart"></div>
+        <p class="panel__note" id="note-size" hidden>
+          <b>口径</b>：体积为磁盘上的模型文件大小（.pth 与 OpenVINO IR 的 .xml + .bin）。
+          INT8 仅在权重上压到 1/4，未量化的算子仍保持 f32 形态，因此实际体积降幅不等于 1/4。
+        </p>
       </section>
     </div>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>测速协议</h2>
-        <span class="sub">结论只从三组实测得出，不预设 INT8 更快</span>
+    <section class="panel" style="margin-top:var(--s4)">
+      <div class="panel__head">
+        <h3>测速协议</h3>
+        <span class="sub">结论只从实测得出，不预设 INT8 更快</span>
       </div>
-      <div class="protocol" id="protocolBox"></div>
+      <dl class="tiles" id="protocolBox"></dl>
     </section>
   </section>
 
-  <!-- ══════════ 质量评测 ══════════ -->
-  <section class="panel-page" id="page-quality">
-    <div class="notice" id="qualityNotice"></div>
+  <!-- ══════════ 03 质量评测 ══════════ -->
+  <section class="page" id="page-quality" role="tabpanel" aria-labelledby="tab-quality" tabindex="0">
+    <header class="page__head">
+      <p class="eyebrow">E3 / E4 · 全量评测</p>
+      <h2 class="page__title">质量评测</h2>
+      <p class="page__lede">三路同输入出图后逐对比较：a=PyTorch FP32、b=OpenVINO FP32、c=OpenVINO INT8。
+        差异被拆成「转换引入」与「量化引入」两段，避免把两者混为一谈。</p>
+    </header>
 
-    <div class="two-col">
-      <section class="card chart-card">
-        <div class="card-head">
-          <h2>量化保真度 · 三对差异归因</h2>
-          <span class="sub">a=PyTorch · b=OV FP32 · c=OV INT8</span>
+    <div class="notice" id="qualityNotice" role="status"></div>
+    <ul class="tiles" id="deepTiles"></ul>
+
+    <div class="grid grid--2">
+      <section class="panel">
+        <div class="panel__head">
+          <h3>量化保真度 · 三对差异归因</h3>
+          <span class="sub">越小越相似</span>
+          <button class="info-btn" data-note="note-lpips" aria-expanded="false" aria-label="LPIPS 口径说明">i</button>
         </div>
         <div class="chart" id="lpipsChart"></div>
-        <ul class="legend-note">
-          <li><b>a→b（转换差异）</b> 应≈0；偏大说明转换有 bug，不是量化的锅</li>
-          <li><b>b→c（量化差异）</b> 核心指标，量化本身引入的损失</li>
-          <li><b>a→c（总差异）</b> 原版到终版，应约等于前两项之和</li>
-          <li class="muted-note">quality.json 含 deep 字段时为真实 LPIPS（越小越相似）；否则为 1 − SSIM 结构差异代理值，不可写进报告</li>
-        </ul>
+        <p class="panel__note" id="note-lpips" hidden>
+          <b>归因逻辑</b>：a→b 是格式转换带来的差异，理应接近 0；b→c 是量化本身的代价；a→c 是总差异。
+          有了这三对，就能把「转换写崩」和「量化有损」分开归因。<b>数值</b>：deep 字段存在时为真实 LPIPS
+          （AlexNet 特征距离，越小越相似）；否则是 1 − SSIM 的结构代理值，仅供界面联调，不可写进报告。
+        </p>
       </section>
 
-      <section class="card chart-card">
-        <div class="card-head">
-          <h2>结构保真</h2>
+      <section class="panel">
+        <div class="panel__head">
+          <h3>结构保真</h3>
           <span class="sub">越接近 1 越好</span>
+          <button class="info-btn" data-note="note-struct" aria-expanded="false" aria-label="结构指标口径说明">i</button>
         </div>
         <div class="chart" id="structChart"></div>
-        <ul class="legend-note">
-          <li><b>SSIM</b> 全图结构相似度</li>
-          <li><b>边缘 SSIM</b> 只看结构、不比纹理</li>
-          <li><b>背景 SSIM</b> 掩码外区域，验证背景未被改写</li>
-        </ul>
+        <p class="panel__note" id="note-struct" hidden>
+          <b>SSIM</b>：全图结构相似度。<b>边缘 SSIM</b>：只在 Canny 边缘图上比较，过滤纹理只比轮廓，
+          用来判断主体轮廓是否被改写。两者背离说明变化集中在纹理而非结构。
+        </p>
       </section>
     </div>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>逐样本明细</h2>
+    <section class="panel" style="margin-top:var(--s4)">
+      <div class="panel__head">
+        <h3>E4 · 层间表示漂移</h3>
+        <span class="sub" id="layerSub">15 个探针层的余弦相似度与相对 L2</span>
+        <button class="info-btn" data-note="note-layer" aria-expanded="false" aria-label="层间漂移口径说明">i</button>
+      </div>
+      <div class="chart" id="layerChart"></div>
+      <p class="panel__note" id="note-layer" hidden>
+        <b>做法</b>：同一批图分别过 FP32 与「插入伪量化节点」的 INT8 模拟图，在 15 个探针层取特征张量，
+        逐层算余弦相似度与相对 L2 范数。<b>读法</b>：余弦随深度单调下降、相对误差单调上升，说明量化误差在残差块里逐级累积，
+        而不是集中在某一层。探针层取自 ResNet 生成器的下采样段、9 个残差块与上采样段，
+        尾部解码层负责把层内漂移「翻译」成肉眼可见的纹理差别。
+      </p>
+    </section>
+
+    <section class="panel" style="margin-top:var(--s4)">
+      <div class="panel__head">
+        <h3>逐样本明细</h3>
         <span class="sub" id="qualitySub"></span>
       </div>
       <div class="table-wrap"><table id="qualityTable"></table></div>
     </section>
   </section>
 
-  <!-- ══════════ 实验进度 ══════════ -->
-  <section class="panel-page" id="page-plan">
-    <section class="card">
-      <div class="card-head">
-        <h2>实验进度 E0 – E6</h2>
-        <span class="sub">对齐《人工智能导论》四阶段与小组方案 §6</span>
+  <!-- ══════════ 04 实验进度 ══════════ -->
+  <section class="page" id="page-plan" role="tabpanel" aria-labelledby="tab-plan" tabindex="0">
+    <header class="page__head">
+      <p class="eyebrow">Plan · 四阶段</p>
+      <h2 class="page__title">实验进度</h2>
+      <p class="page__lede">对齐课程四阶段与小组方案 §6 的编号体例；每张卡片右侧标记当前状态，
+        未完成项如实显示，不用「已完成」粉饰。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel__head">
+        <h3>实验项 E0 – E5</h3>
+        <span class="sub">负结果与部分完成同样登记</span>
       </div>
-      <div class="exp-grid" id="expGrid"></div>
+      <div class="exps" id="expGrid"></div>
     </section>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>数据来源说明</h2>
+    <section class="panel" style="margin-top:var(--s4)">
+      <div class="panel__head">
+        <h3>数据来源说明</h3>
         <span class="sub">哪些是实测，哪些还没接入</span>
       </div>
       <div class="honesty" id="honestyBox"></div>
@@ -206,10 +308,12 @@
 
 </main>
 
-<footer class="foot">
-  <span>ShiftLite · 华南师范大学计算机学院《人工智能导论》课程项目 · 4 人小组</span>
+<footer class="footer">
+  <span>ShiftLite · 华南师范大学计算机学院《人工智能导论》课程项目</span>
   <span id="footTime"></span>
 </footer>
+
+<div class="tip" id="tip" role="tooltip" hidden></div>
 
 <script src="/web/app.js"></script>
 </body>
