@@ -109,6 +109,151 @@ function tipHtml(title, rows) {
   return `<div class="tip__title">${esc(title)}</div>${body}`;
 }
 
+/* ══════════ 呈现：进场生长 / 图题编号 / 出图揭示 / 层序游标 ══════════ */
+
+const LAYERSCAN = {
+  rows: null, x: null, yCos: null, yRel: null,
+  cursor: null, markCos: null, markRel: null, raf: 0,
+};
+let CHART_OBS = null;
+
+function prefersReduced() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+/* 柱子与折线进入视区才生长：单次、不循环，读的是真实数值，只是呈现时序不同 */
+function armCharts() {
+  document.querySelectorAll('.chart').forEach((host) => {
+    host.classList.remove('is-in');
+    host.querySelectorAll('polyline.grow-line').forEach((p) => {
+      try {
+        p.style.setProperty('--len', p.getTotalLength().toFixed(1));
+      } catch (e) { /* 取不到路径长度时退回 CSS 默认长度 */ }
+    });
+    let i = 0;
+    host.querySelectorAll('rect.grow-y, rect.grow-x').forEach((r) => {
+      r.style.transitionDelay = `${i * 55}ms`;
+      i += 1;
+    });
+    let j = 0;
+    host.querySelectorAll('circle.grow-dot').forEach((c) => {
+      c.style.transitionDelay = `${300 + j * 28}ms`;
+      j += 1;
+    });
+  });
+
+  if (!('IntersectionObserver' in window)) {
+    document.querySelectorAll('.chart').forEach((c) => c.classList.add('is-in'));
+    return;
+  }
+  if (!CHART_OBS) {
+    CHART_OBS = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('is-in');
+        CHART_OBS.unobserve(e.target);
+        if (e.target.id === 'layerChart') setTimeout(playLayerScan, 340);
+      });
+    }, { threshold: 0.18 });
+  }
+  document.querySelectorAll('.chart').forEach((host) => CHART_OBS.observe(host));
+}
+
+/* 图/表编号按当前页内出现顺序编排，切页不会串号 */
+function renumberCaptions() {
+  document.querySelectorAll('.page').forEach((p) => {
+    let f = 0;
+    let t = 0;
+    p.querySelectorAll('.fig__cap').forEach((c) => {
+      f += 1;
+      const n = c.querySelector('.fig__no');
+      if (n) n.textContent = `图 ${f}`;
+    });
+    p.querySelectorAll('.tbl__cap').forEach((c) => {
+      t += 1;
+      const n = c.querySelector('.fig__no');
+      if (n) n.textContent = `表 ${t}`;
+    });
+  });
+}
+
+/* 出图揭示：只改变呈现时序，不改任何像素，也不参与任何指标计算 */
+function revealResult() {
+  if (prefersReduced()) return;
+  if (SEL.mode === 'slide') {
+    const range = $('slideRange');
+    const dur = 640;
+    const t0 = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      // 100 = 全是输入，0 = 全是输出，从输入一侧扫过去才是"揭示出输出"
+      range.value = String(Math.round(100 - t * 100));
+      updateWipe();
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    return;
+  }
+  const target = SEL.mode === 'diff'
+    ? $('diffMap')
+    : ($('imgOut') ? $('imgOut').closest('figure') : null);
+  if (!target) return;
+  target.classList.remove('is-revealing');
+  void target.offsetWidth;
+  target.classList.add('is-revealing');
+}
+
+/* E4 层序扫描：游标沿探针层推进，读数全部来自 layers.json 的真实值 */
+function playLayerScan() {
+  const S = LAYERSCAN;
+  if (!S.rows || !S.rows.length) return;
+  if (S.raf) cancelAnimationFrame(S.raf);
+  const dur = prefersReduced() ? 0 : 1400;
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = dur ? Math.min(1, (now - t0) / dur) : 1;
+    updateLayerCursor(Math.min(S.rows.length - 1, Math.floor(t * S.rows.length)));
+    S.raf = t < 1 ? requestAnimationFrame(step) : 0;
+  };
+  updateLayerCursor(0);
+  S.raf = requestAnimationFrame(step);
+}
+
+function updateLayerCursor(i) {
+  const S = LAYERSCAN;
+  const r = S.rows[i];
+  const box = $('layerReadout');
+  if (!r || !S.cursor || !box) return;
+  const x = S.x(i);
+  S.cursor.setAttribute('x1', x);
+  S.cursor.setAttribute('x2', x);
+  S.cursor.setAttribute('opacity', '1');
+  S.markCos.setAttribute('cx', x);
+  S.markCos.setAttribute('cy', S.yCos(r.cosine));
+  S.markCos.setAttribute('opacity', '1');
+  S.markRel.setAttribute('cx', x);
+  S.markRel.setAttribute('cy', S.yRel(r.rel_l2));
+  S.markRel.setAttribute('opacity', '1');
+
+  box.innerHTML = '';
+  const cells = [
+    ['层序', `${i + 1} / ${S.rows.length}`],
+    ['层', r.layer, 'lr-name'],
+    ['余弦相似度', r.cosine.toFixed(6)],
+    ['相对 L2', r.rel_l2.toFixed(4)],
+    ['平均绝对误差', r.mean_abs_err != null ? Number(r.mean_abs_err).toExponential(2) : '—'],
+    ['张量形状', Array.isArray(r.shape) ? r.shape.join('×') : String(r.shape ?? '—')],
+  ];
+  cells.forEach(([k, v, cls]) => {
+    box.append(el('span', { class: cls || '' }, [`${k} `, el('b', { text: String(v) })]));
+  });
+}
+
+function bindLayerTools() {
+  const btn = $('layerReplay');
+  if (btn) btn.addEventListener('click', playLayerScan);
+}
+
 /* ══════════ 启动 ══════════ */
 
 async function init() {
@@ -120,6 +265,7 @@ async function init() {
   bindUpload();
   bindRun();
   bindInfoNotes();
+  bindLayerTools();
   HISTORY = loadHistory();
   renderHistory();
 
@@ -171,6 +317,8 @@ function render() {
   renderLayerChart();
   renderExperiments();
   renderHonesty();
+  renumberCaptions();
+  armCharts();
 }
 
 /* ══════════ 标签页 ══════════ */
@@ -615,6 +763,7 @@ function applyResult(j) {
   $('lmSize').textContent = '256 × 256';
 
   if (SEL.mode === 'diff') renderDiff();
+  revealResult();
 }
 
 /* ── 运行记录 ── */
@@ -1050,7 +1199,7 @@ function renderLayerChart() {
   const line = (pts, color, dash) => s.append(svg('polyline', {
     points: pts, fill: 'none', stroke: color, 'stroke-width': 2,
     'stroke-linejoin': 'round', 'stroke-linecap': 'round',
-    'stroke-dasharray': dash || null,
+    'stroke-dasharray': dash || null, class: 'grow-line',
   }));
 
   line(rows.map((r, i) => `${x(i)},${yCos(r.cosine)}`).join(' '), '#2c56a3');
@@ -1063,14 +1212,28 @@ function renderLayerChart() {
   });
   s.append(guide);
 
+  // 层序游标：扫描期间沿探针层推进，高亮点的坐标取自上面的真实映射
+  const cursor = svg('line', {
+    x1: pad.l, x2: pad.l, y1: pad.t, y2: pad.t + ih,
+    stroke: '#1b3a6b', 'stroke-width': 1.4, opacity: 0,
+  });
+  const markCos = svg('circle', {
+    cx: pad.l, cy: pad.t, r: 5, fill: '#2c56a3',
+    stroke: '#fff', 'stroke-width': 1.5, opacity: 0,
+  });
+  const markRel = svg('circle', {
+    cx: pad.l, cy: pad.t, r: 5, fill: '#b07717',
+    stroke: '#fff', 'stroke-width': 1.5, opacity: 0,
+  });
+
   rows.forEach((r, i) => {
     s.append(svg('circle', {
       cx: x(i), cy: yCos(r.cosine), r: 3, fill: '#fff',
-      stroke: '#2c56a3', 'stroke-width': 1.6,
+      stroke: '#2c56a3', 'stroke-width': 1.6, class: 'grow-dot',
     }));
     s.append(svg('circle', {
       cx: x(i), cy: yRel(r.rel_l2), r: 3, fill: '#fff',
-      stroke: '#b07717', 'stroke-width': 1.6,
+      stroke: '#b07717', 'stroke-width': 1.6, class: 'grow-dot',
     }));
 
     const t = svg('text', {
@@ -1109,6 +1272,16 @@ function renderLayerChart() {
     tx.textContent = name;
     s.append(tx);
   });
+
+  s.append(cursor, markCos, markRel);
+  LAYERSCAN.rows = rows;
+  LAYERSCAN.x = x;
+  LAYERSCAN.yCos = yCos;
+  LAYERSCAN.yRel = yRel;
+  LAYERSCAN.cursor = cursor;
+  LAYERSCAN.markCos = markCos;
+  LAYERSCAN.markRel = markRel;
+  updateLayerCursor(rows.length - 1);
 
   host.innerHTML = '';
   host.append(s);

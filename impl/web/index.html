@@ -184,7 +184,11 @@
           <span class="sub">含误差棒（均值 ± 标准差）</span>
           <button class="info-btn" data-note="note-latency" aria-expanded="false" aria-label="延迟口径说明">i</button>
         </div>
-        <div class="chart" id="latencyChart"></div>
+        <figure class="fig">
+          <div class="chart" id="latencyChart"></div>
+          <figcaption class="fig__cap"><span class="fig__no"></span>三组单图延迟，柱高为多轮均值、误差棒为 ±1 标准差；
+            测试平台与计时轮数见表 1。</figcaption>
+        </figure>
         <p class="panel__note" id="note-latency" hidden>
           <b>口径</b>：柱高为多轮推理延迟的均值，误差棒为 ±1 标准差；不计入模型加载与首次惰性初始化
           （预热 3 轮后才开始计时）。<b>注意</b>：实测显示该组数字强平台依赖——同一模型在 AMD 与 Intel 平台上的
@@ -198,7 +202,11 @@
           <span class="sub">INT8 目标：压到 FP32 的约 1/4</span>
           <button class="info-btn" data-note="note-size" aria-expanded="false" aria-label="体积口径说明">i</button>
         </div>
-        <div class="chart" id="sizeChart"></div>
+        <figure class="fig">
+          <div class="chart" id="sizeChart"></div>
+          <figcaption class="fig__cap"><span class="fig__no"></span>三组模型体积（磁盘文件大小）。
+            INT8 只在权重上压缩，未量化的算子仍保持 f32 形态，故降幅不等于严格的 1/4。</figcaption>
+        </figure>
         <p class="panel__note" id="note-size" hidden>
           <b>口径</b>：体积为磁盘上的模型文件大小（.pth 与 OpenVINO IR 的 .xml + .bin）。
           INT8 仅在权重上压到 1/4，未量化的算子仍保持 f32 形态，因此实际体积降幅不等于 1/4。
@@ -211,6 +219,8 @@
         <h3>测速协议</h3>
         <span class="sub">结论只从实测得出，不预设 INT8 更快</span>
       </div>
+      <div class="tbl__cap"><span class="fig__no"></span>测速协议参数。延迟与加速比强平台依赖，
+        引用任何加速比都要带平台标注。</div>
       <dl class="tiles" id="protocolBox"></dl>
     </section>
   </section>
@@ -234,7 +244,11 @@
           <span class="sub">越小越相似</span>
           <button class="info-btn" data-note="note-lpips" aria-expanded="false" aria-label="LPIPS 口径说明">i</button>
         </div>
-        <div class="chart" id="lpipsChart"></div>
+        <figure class="fig">
+          <div class="chart" id="lpipsChart"></div>
+          <figcaption class="fig__cap"><span class="fig__no"></span>三对感知差异：a→b 是格式转换引入，b→c 是量化引入，
+            a→c 是总差异。数值为真实 LPIPS（AlexNet 特征距离），越小越相似。</figcaption>
+        </figure>
         <p class="panel__note" id="note-lpips" hidden>
           <b>归因逻辑</b>：a→b 是格式转换带来的差异，理应接近 0；b→c 是量化本身的代价；a→c 是总差异。
           有了这三对，就能把「转换写崩」和「量化有损」分开归因。<b>数值</b>：deep 字段存在时为真实 LPIPS
@@ -248,7 +262,11 @@
           <span class="sub">越接近 1 越好</span>
           <button class="info-btn" data-note="note-struct" aria-expanded="false" aria-label="结构指标口径说明">i</button>
         </div>
-        <div class="chart" id="structChart"></div>
+        <figure class="fig">
+          <div class="chart" id="structChart"></div>
+          <figcaption class="fig__cap"><span class="fig__no"></span>结构保真四项，越接近 1 越好。
+            边缘 SSIM 只在 Canny 边缘图上比较，过滤纹理只比轮廓。</figcaption>
+        </figure>
         <p class="panel__note" id="note-struct" hidden>
           <b>SSIM</b>：全图结构相似度。<b>边缘 SSIM</b>：只在 Canny 边缘图上比较，过滤纹理只比轮廓，
           用来判断主体轮廓是否被改写。两者背离说明变化集中在纹理而非结构。
@@ -262,7 +280,17 @@
         <span class="sub" id="layerSub">15 个探针层的余弦相似度与相对 L2</span>
         <button class="info-btn" data-note="note-layer" aria-expanded="false" aria-label="层间漂移口径说明">i</button>
       </div>
-      <div class="chart" id="layerChart"></div>
+      <figure class="fig">
+        <div class="chart" id="layerChart"></div>
+        <figcaption class="fig__cap"><span class="fig__no"></span>15 个探针层按网络前向序排列（layers.json 为字母序，
+          此处已重排），阴影段为 9 个残差块。余弦单调下降、相对 L2 单调上升，即量化误差沿深度逐级累积
+          而非集中在某一层。</figcaption>
+      </figure>
+      <div class="layer-tools">
+        <button class="chip-btn" id="layerReplay">重播层序扫描</button>
+        <span class="hint">游标逐层推进，读数全部取自 layers.json 的真实值</span>
+      </div>
+      <div class="layer-readout" id="layerReadout" aria-live="polite"></div>
       <p class="panel__note" id="note-layer" hidden>
         <b>做法</b>：同一批图分别过 FP32 与「插入伪量化节点」的 INT8 模拟图，在 15 个探针层取特征张量，
         逐层算余弦相似度与相对 L2 范数。<b>读法</b>：余弦随深度单调下降、相对误差单调上升，说明量化误差在残差块里逐级累积，
@@ -276,6 +304,8 @@
         <h3>逐样本明细</h3>
         <span class="sub" id="qualitySub"></span>
       </div>
+      <div class="tbl__cap"><span class="fig__no"></span>逐样本明细（testA 全量）。
+        带「·异常」标记的行 ssim(b,c) 低于登记阈值，异常图仍计入全集均值。</div>
       <div class="table-wrap"><table id="qualityTable"></table></div>
     </section>
   </section>

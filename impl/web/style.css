@@ -389,12 +389,10 @@ button {
 /* 面板：白底 + 发丝边框，替代everything-is-a-card */
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: clamp(16px, 1.3vw, 22px);
-  box-shadow: var(--sh-1);
   margin: 0;
+  padding: var(--s5) 0 0;
+  background: none;
+  border-top: 1px solid var(--line-2);
 }
 
 .panel > .panel + .panel {
@@ -405,7 +403,9 @@ button {
   display: flex;
   align-items: baseline;
   gap: var(--s3);
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
@@ -1254,18 +1254,16 @@ button {
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 1px;
-  background: var(--line);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  margin-bottom: var(--s4);
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--s5) var(--s6);
+  margin: 0 0 var(--s5);
+  padding: 0;
+  list-style: none;
 }
 
 .tile {
-  background: var(--surface);
-  padding: var(--s4);
+  padding: 0 0 0 var(--s4);
+  border-left: 1px solid var(--line-2);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1303,14 +1301,8 @@ button {
   line-height: 1.6;
 }
 
-.tile--accent::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--accent);
+.tile--accent {
+  border-left: 2px solid var(--accent);
 }
 
 /* 指标表格：发丝分隔 + 表头吸附 */
@@ -1318,8 +1310,8 @@ button {
 .table-wrap {
   overflow: auto;
   max-height: 520px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-top: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
 }
 
 table {
@@ -1366,7 +1358,7 @@ tbody td:first-child {
 }
 
 tbody tr:nth-child(even) td {
-  background: var(--surface-2);
+  background: none;
 }
 
 tbody tr:hover td {
@@ -1396,32 +1388,44 @@ tbody tr:last-child td {
   font-variant-numeric: tabular-nums;
 }
 
-/* 柱子与折线：进场用指数缓动生长，不用回弹 */
-@keyframes growY {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
-
-@keyframes growX {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-
+/* 柱子与折线：进入视区才生长，单次、不循环，指数缓动不回弹 */
 .chart rect.grow-y {
   transform-box: fill-box;
   transform-origin: bottom;
-  animation: growY 0.5s var(--ease) both;
+  transform: scaleY(0);
+  transition: transform 0.42s var(--ease);
 }
 
 .chart rect.grow-x {
   transform-box: fill-box;
   transform-origin: left;
-  animation: growX 0.5s var(--ease) both;
+  transform: scaleX(0);
+  transition: transform 0.42s var(--ease);
 }
 
-.chart polyline,
-.chart circle {
-  animation: rise 0.45s var(--ease) both;
+.chart.is-in rect.grow-y,
+.chart.is-in rect.grow-x {
+  transform: none;
+}
+
+/* 折线描线：--len 由 JS 用 getTotalLength 写入，读的是真实路径长度 */
+.chart polyline.grow-line {
+  stroke-dasharray: var(--len, 900);
+  stroke-dashoffset: var(--len, 900);
+  transition: stroke-dashoffset 0.55s var(--ease);
+}
+
+.chart.is-in polyline.grow-line {
+  stroke-dashoffset: 0;
+}
+
+.chart circle.grow-dot {
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+}
+
+.chart.is-in circle.grow-dot {
+  opacity: 1;
 }
 
 .chart-empty {
@@ -1484,21 +1488,21 @@ tbody tr:last-child td {
 
 .exps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
-  gap: var(--s3);
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 0 var(--s6);
 }
 
 .exp {
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--line-2);
-  border-radius: var(--r-sm);
-  padding: var(--s3) var(--s4);
-  background: var(--surface-2);
-  transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  background: none;
+  transition: background var(--dur-2) var(--ease);
 }
 
 .exp:hover {
-  background: var(--surface);
+  background: var(--surface-2);
 }
 
 .exp__head {
@@ -1540,7 +1544,7 @@ tbody tr:last-child td {
 }
 
 .exp.is-done {
-  border-left-color: var(--ok);
+  box-shadow: inset 2px 0 0 var(--ok);
 }
 
 .exp.is-done .exp__flag {
@@ -1549,12 +1553,16 @@ tbody tr:last-child td {
 }
 
 .exp.is-partial {
-  border-left-color: var(--warn);
+  box-shadow: inset 2px 0 0 var(--warn);
 }
 
 .exp.is-partial .exp__flag {
   background: var(--warn-soft);
   color: var(--warn);
+}
+
+.exp.is-todo {
+  box-shadow: inset 2px 0 0 var(--line-2);
 }
 
 .exp.is-todo .exp__flag {
@@ -1565,7 +1573,7 @@ tbody tr:last-child td {
 .honesty {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: 0;
 }
 
 .honesty__row {
@@ -1575,10 +1583,9 @@ tbody tr:last-child td {
   align-items: start;
   font-size: var(--t-sm);
   color: var(--ink-2);
-  padding: 10px var(--s3);
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  padding: var(--s3) var(--s2) var(--s3) var(--s4);
+  background: none;
+  border-top: 1px solid var(--line);
   line-height: 1.75;
 }
 
@@ -1694,6 +1701,103 @@ tbody tr:last-child td {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ── 11. 图题编号与题注 ─────────────────────────────────── */
+
+.fig {
+  margin: 0;
+}
+
+.fig__cap,
+.tbl__cap {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  line-height: 1.7;
+}
+
+.fig__cap {
+  margin-top: var(--s2);
+}
+
+.tbl__cap {
+  margin: 0 0 var(--s2);
+}
+
+.fig__no {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 6px;
+}
+
+/* ── 12. 出图揭示与层序游标 ─────────────────────────────── */
+
+@keyframes revealX {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+/* 揭示只改变呈现时序，不改动任何像素，也不参与任何指标计算 */
+.is-revealing {
+  animation: revealX 0.64s var(--ease) both;
+}
+
+.layer-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  flex-wrap: wrap;
+}
+
+.layer-tools .hint {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+
+.layer-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s5);
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px dashed var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  min-height: 24px;
+}
+
+.layer-readout b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.layer-readout .lr-name {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart rect.grow-y,
+  .chart rect.grow-x {
+    transform: none;
+    transition: none;
+  }
+
+  .chart polyline.grow-line {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+
+  .chart circle.grow-dot {
+    opacity: 1;
+    transition: none;
+  }
+
+  .is-revealing {
+    animation: none;
   }
 }
 
