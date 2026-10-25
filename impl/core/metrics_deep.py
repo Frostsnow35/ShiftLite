@@ -362,7 +362,12 @@ def register_anomalies(records: list[dict], out_dir: Path) -> Path:
     """把异常样例写盘，供 12 月的异常拼图使用。
 
     records 每项：{"name": str, "image": HWC ndarray, "reason": str,
-                   "metrics": dict}。异常样本不进全量均值，单独成目录。
+                   "metrics": dict}。
+
+    注意本函数**只做写盘登记，不改任何统计量**：异常样本照常计入 quality.json
+    的 testA 全集均值（实测 mean.ssim_bc = 全 120 张均值，剔除 3 例后由 0.885447
+    升到 0.888369）。这与开题报告「逐图计算后取 testA 全集均值，异常图单独登记」
+    一致——单独成目录只是方便复查，不是把它们从统计里剔除。
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

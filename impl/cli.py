@@ -427,6 +427,7 @@ def _cpu_name() -> str:
 
 def cmd_bench(args):
     from core.backends import Runtime, GROUP_LABEL
+    from core.mem import rss_mb
     from core.utils import SIZE
 
     rt = Runtime(MODELS / "horse2zebra.pth",
@@ -457,11 +458,17 @@ def cmd_bench(args):
         _p(f"  {gid} 组 {GROUP_LABEL[gid]} 预热…")
         rt.warmup(gid, args.warmup)
 
+        # 内存口径：进程 RSS。采样放在计时窗口**之外**，不污染延迟测量。
+        rss_before = rss_mb()
         times = []
+        rss_peak = rss_before
         for i in range(args.rounds):
             t0 = time.perf_counter()
             rt.infer(x, gid)
             times.append((time.perf_counter() - t0) * 1000)
+            r = rss_mb()
+            if r is not None and (rss_peak is None or r > rss_peak):
+                rss_peak = r
             _p(f"    第 {i+1}/{args.rounds} 轮 {times[-1]:.1f} ms")
 
         arr = np.array(times[args.warmup_drop:]) if len(times) > args.warmup_drop else np.array(times)
@@ -480,6 +487,13 @@ def cmd_bench(args):
             "rounds_total": int(len(times)),
             "rounds_used": int(arr.size),
             "size_mb": rt.model_size_mb(gid),
+            # 内存四项里的第四项（PLAN §4）。三组在同一进程里顺序加载，
+            # 后测的组 RSS 绝对值含先前运行时的常驻，跨组横向比较要看
+            # rss_delta_mb（推理期间峰值 − 本组推理前基线）。
+            "rss_before_mb": None if rss_before is None else round(rss_before, 1),
+            "rss_peak_mb": None if rss_peak is None else round(rss_peak, 1),
+            "rss_delta_mb": (None if (rss_before is None or rss_peak is None)
+                             else round(rss_peak - rss_before, 1)),
             # rt.precision() 返回的是运行时精度提示（三组都传了 f32 hint），
             # 直接落盘会让 C 组记成 float32 —— 界面是对的、产物文件是错的。
             # 这里按组别写真实数值格式，另用字段记录当时的提示值。
@@ -505,6 +519,10 @@ def cmd_bench(args):
             "warmup": args.warmup,
             "rounds": args.rounds,
             "dropped_rounds": args.warmup_drop,
+            # 内存：进程 RSS(MB)。rss_before=本组推理前（模型已加载）基线，
+            # rss_peak=推理期间采样峰值，rss_delta=两者之差。三组分先后在同一
+            # 进程加载，绝对值不可横向比，增量可比。
+            "memory_metric": "进程 RSS (MB)：rss_peak − rss_before",
         },
         "groups": groups,
     }
@@ -512,11 +530,12 @@ def cmd_bench(args):
     (RESULTS / "benchmark.json").write_text(
         json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    _p("\n组别  均值(ms)  标准差  FPS    体积(MB)  相对A加速")
+    _p("\n组别  均值(ms)  标准差  FPS    体积(MB)  相对A加速  RSS峰值(MB)  推理增量(MB)")
     for g in groups:
         if g.get("available"):
             _p(f"{g['id']}     {g['mean_ms']:>7.1f}  {g['std_ms']:>6.1f}  "
-               f"{g['fps']:>6.1f}  {g['size_mb']:>7.2f}   {g.get('speedup_vs_A','-')}x")
+               f"{g['fps']:>6.1f}  {g['size_mb']:>7.2f}   {g.get('speedup_vs_A','-')}x"
+               f"       {g.get('rss_peak_mb','-')}        {g.get('rss_delta_mb','-')}")
 
 
 # ---------------- quality ----------------
@@ -752,7 +771,10 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
         records = [r for r in records if r["image"] is not None]
         if records:
             p = register_anomalies(records, RESULTS / "anomalies")
-            deep["anomalies"] = {"count": len(records), "index": str(p),
+            # 落盘相对路径（相对 impl/）：产物 JSON 要进仓库，写本机绝对路径
+            # 会让队友 clone 后该字段直接失效。读取侧按脚本根拼接。
+            deep["anomalies"] = {"count": len(records),
+                                 "index": str(p.relative_to(ROOT)),
                                  "threshold": args.anomaly_threshold}
             _p(f"  异常样例 {len(records)} 张 → {p.parent.name}/")
         else:

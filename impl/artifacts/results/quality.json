@@ -2702,7 +2702,7 @@
     },
     "anomalies": {
       "count": 3,
-      "index": "E:\\人工智能导论项目\\ShiftLite\\impl\\artifacts\\results\\anomalies\\anomalies.json",
+      "index": "artifacts\\results\\anomalies\\anomalies.json",
       "threshold": 0.8
     }
   }

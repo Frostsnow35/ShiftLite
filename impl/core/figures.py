@@ -23,6 +23,10 @@ from PIL import Image
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
+# 脚本根 = impl/。JSON 里的图片路径是相对 impl/ 存的，读图必须按这个根拼接，
+# 不能交给调用方的 cwd —— 从仓库根跑 `python cli.py figures` 会找不到图。
+ROOT = Path(__file__).resolve().parent.parent
+
 # E4 探针层的网络前向顺序（layers.json 的 rows 是字母序，不能直接画）
 PROBE_ORDER = [
     "down_relu_1", "down_relu_2", "down_relu_3",
@@ -43,6 +47,61 @@ AMD_FOOTNOTE = (
 def _load(path: Path) -> dict | list:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def fig_e1_samples(results: Path, out: Path) -> Path:
+    """E1 基线出图拼图：输入马图 | PyTorch FP32 基线(a) | OV FP32(b) | OV INT8(c)。
+
+    E1 的交付定义是「基线推理跑通，马→斑马出图」（第五章进度表阶段②），所以
+    第一要义是证明官方权重在本仓库里能正常出图，顺带把三组并列展示。异常拼图
+    （E3）不能替代它——那是失真样本，不是正常出图展示。
+    """
+    from core.metrics import ssim  # 与 quality 同一实现，口径一致
+
+    samples = ROOT / "artifacts" / "samples"
+    quality_dir = results / "quality"
+    horses = sorted(samples.glob("horse_*.png"))[:3]
+    if not horses:
+        raise SystemExit("samples/ 里没有 horse_*.png，先跑 setup")
+
+    cols = ["输入马图", "A · PyTorch FP32（基线）", "B · OpenVINO FP32",
+            "C · OpenVINO INT8"]
+    n = len(horses)
+    fig, axes = plt.subplots(n, 4, figsize=(12.8, 3.1 * n))
+    if n == 1:
+        axes = axes.reshape(1, 4)
+    fig.suptitle(
+        f"E1 基线出图样例（{n} 张，官方 horse2zebra 预训练权重，无训练）\n"
+        "同一张输入分别走三组后端；SSIM 为全图结构相似度（与 quality.json 同一实现）",
+        fontsize=10)
+
+    for i, hp in enumerate(horses):
+        stem = hp.stem
+        paths = [hp, quality_dir / f"{stem}_A.png",
+                 quality_dir / f"{stem}_B.png", quality_dir / f"{stem}_C.png"]
+        miss = [p.name for p in paths if not p.exists()]
+        if miss:
+            raise SystemExit(
+                f"E1 拼图缺素材：{miss}。先跑 `python cli.py quality` 生成三组输出图")
+        arrs = [np.asarray(Image.open(p).convert("RGB"), dtype=np.float32)
+                for p in paths]
+        for j, p in enumerate(paths):
+            axes[i][j].imshow(np.asarray(Image.open(p).convert("RGB")))
+            axes[i][j].set_xticks([])
+            axes[i][j].set_yticks([])
+            if i == 0:
+                axes[i][j].set_title(cols[j], fontsize=9)
+        axes[i][0].set_ylabel(stem, fontsize=8.5)
+        axes[i][2].set_xlabel(
+            f"SSIM(a,b)={ssim(arrs[1], arrs[2]):.4f}   "
+            f"SSIM(b,c)={ssim(arrs[2], arrs[3]):.4f}",
+            fontsize=7.5)
+
+    fig.tight_layout(rect=(0, 0, 1, 0.95 if n > 1 else 0.9))
+    dest = out / "fig_e1_samples.png"
+    fig.savefig(dest, dpi=200)
+    plt.close(fig)
+    return dest
 
 
 def fig_e2_perf(results: Path, out: Path) -> Path:
@@ -109,7 +168,7 @@ def fig_e3_anomalies(results: Path, out: Path) -> Path:
         name = item["name"]
         m = item["metrics"]
         paths = [
-            Path(m["input"]),
+            ROOT / m["input"],
             quality_dir / f"{name}_B.png",
             quality_dir / f"{name}_C.png",
         ]
@@ -224,6 +283,7 @@ def make_all(results: Path | None = None, out: Path | None = None) -> list[Path]
     out = out or root / "artifacts" / "figures"
     out.mkdir(parents=True, exist_ok=True)
     produced = [
+        fig_e1_samples(results, out),
         fig_e2_perf(results, out),
         fig_e3_anomalies(results, out),
         fig_e4_layers(results, out),
@@ -232,5 +292,5 @@ def make_all(results: Path | None = None, out: Path | None = None) -> list[Path]
     return produced
 
 
-__all__ = ["make_all", "PROBE_ORDER", "fig_e2_perf",
+__all__ = ["make_all", "PROBE_ORDER", "fig_e1_samples", "fig_e2_perf",
            "fig_e3_anomalies", "fig_e4_layers", "quality_table"]
