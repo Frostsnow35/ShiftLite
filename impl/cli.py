@@ -809,6 +809,16 @@ def cmd_layers(args):
     _p(f"已写入 {RESULTS / 'layers.json'}")
 
 
+# ---------------- figures ----------------
+
+def cmd_figures(args):
+    from core.figures import make_all
+    produced = make_all()
+    _p("实验图表已生成（issue #14）：")
+    for p in produced:
+        _p(f"  {p}")
+
+
 # ---------------- serve ----------------
 
 def cmd_serve(args):
@@ -859,6 +869,9 @@ def main():
     v.add_argument("--host", default="127.0.0.1")
     v.add_argument("--port", type=int, default=8770)
     v.set_defaults(func=cmd_serve)
+
+    fg = sub.add_parser("figures", help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
+    fg.set_defaults(func=cmd_figures)
 
     args = ap.parse_args()
     sys.path.insert(0, str(ROOT))

@@ -14,5 +14,6 @@ pillow>=10.0
 torchvision>=0.15
 opencv-python>=4.8    # Canny 边缘，方案指定的那版
 lpips>=0.1.4          # 真实 LPIPS，权重随包自带（weights/v0.1/alex.pth）
+matplotlib>=3.7       # 实验图表（python cli.py figures）
 
 # 注：2026-10-24 起转换链路改为 PyTorch 直转 OpenVINO IR，不再需要 onnx。
