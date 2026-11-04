@@ -38,7 +38,7 @@ jobs:
               echo "::notice::已有校验评论，跳过重复留言。"
               return 0
             fi
-            printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" --body-file -
+            printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" -R "${REPO}" --body-file -
           }
 
           NOTE_PATH="reviews/PR-${PR_NUMBER}.html"
