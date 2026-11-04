@@ -1,7 +1,10 @@
 name: AI PR Reviewer Note Check
 
 # 校验「AI 参与的 PR」是否随 PR 提交了双语 HTML reviewer 说明。
-# 规则见 docs/AI_POLICY.md。main 分支保护要求本检查（ai-pr-reviewer-note）通过才准合并。
+# 规则见 docs/AI_POLICY.md 与 AGENTS.md。
+# main 分支保护要求本检查（ai-pr-reviewer-note）通过才准合并。
+# 判定「AI 参与」的条件：PR 模板勾选「AI 参与」 或 已附 reviews/PR-<编号>.html（二者其一）；
+# 不强制人类手动勾选——AI Agent 按 AGENTS.md 自动产出说明即触发校验。
 
 on:
   pull_request:
@@ -38,23 +41,29 @@ jobs:
             printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" --body-file -
           }
 
-          # 1) 读取 AI 参与勾选状态：定位含 <!-- ai-pr --> 标记的行，判断是否被勾选 [x]
-          ai_line=$(printf '%s' "$PR_BODY" | grep -F '<!-- ai-pr -->' || true)
-          if [ -z "$ai_line" ]; then
-            echo "::notice::未检测到 AI 参与标记，视为非 AI PR，跳过校验。"
-            exit 0
-          fi
-          if ! printf '%s' "$ai_line" | grep -qF '[x]'; then
-            echo "::notice::AI 参与未勾选，跳过校验。"
-            exit 0
-          fi
-
-          echo "::notice::检测到 AI 参与 PR，开始校验双语 HTML reviewer 说明。"
-
-          # 2) 校验 reviews/PR-<编号>.html 是否存在于 PR 的 head 提交
           NOTE_PATH="reviews/PR-${PR_NUMBER}.html"
-          if ! gh api "repos/${REPO}/contents/${NOTE_PATH}?ref=${HEAD_SHA}" >/dev/null 2>&1; then
-            body=$'❌ **缺少双语 HTML reviewer 说明 / Missing bilingual HTML reviewer note**\n\n本 PR 已勾选「AI 参与」，按要求必须随 PR 提交：`reviews/PR-__PRNUM__.html`。\n模板见 `docs/reviewer-note.template.html`。该文件需同时包含中文与英文内容（概述 / AI 参与披露 / 验证 等小节）。\n\nEnglish: This PR is flagged as AI-assisted. You must attach a bilingual HTML reviewer note at `reviews/PR-__PRNUM__.html` (template: `docs/reviewer-note.template.html`). The file must contain both Chinese and English content with key sections (Summary / AI Participation / Verification).\n\n合并已被分支保护阻止，请补充后重新推送。'
+
+          # 1) 判定是否 AI 参与 PR：勾选 或 已附说明文件，二者其一即触发
+          ai_line=$(printf '%s' "$PR_BODY" | grep -F '<!-- ai-pr -->' || true)
+          checkbox_checked=0
+          if [ -n "$ai_line" ] && printf '%s' "$ai_line" | grep -qF '[x]'; then
+            checkbox_checked=1
+          fi
+
+          note_exists=0
+          if gh api "repos/${REPO}/contents/${NOTE_PATH}?ref=${HEAD_SHA}" >/dev/null 2>&1; then
+            note_exists=1
+          fi
+
+          if [ "$checkbox_checked" = 0 ] && [ "$note_exists" = 0 ]; then
+            echo "::notice::未检测到 AI 参与标记，也未附双语说明，视为非 AI PR，跳过校验。"
+            exit 0
+          fi
+          echo "::notice::检测到 AI 参与 PR（勾选=${checkbox_checked} / 说明存在=${note_exists}），开始校验双语结构。"
+
+          # 2) 必须存在 reviews/PR-<编号>.html
+          if [ "$note_exists" = 0 ]; then
+            body=$'❌ **缺少双语 HTML reviewer 说明 / Missing bilingual HTML reviewer note**\n\n本 PR 被识别为 AI 参与，按要求必须随 PR 提交：`reviews/PR-__PRNUM__.html`。\n模板见 `docs/reviewer-note.template.html`。该文件需同时包含中文与英文内容（概述 / AI 参与披露 / 验证 等小节）。\n\nEnglish: This PR is identified as AI-assisted. You must attach a bilingual HTML reviewer note at `reviews/PR-__PRNUM__.html` (template: `docs/reviewer-note.template.html`). The file must contain both Chinese and English content with key sections (Summary / AI Participation / Verification).\n\n合并已被分支保护阻止，请补充后重新推送。'
             body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g")"
             post_comment "$body"
             echo "::error::缺少 ${NOTE_PATH}，合并被阻止。"
