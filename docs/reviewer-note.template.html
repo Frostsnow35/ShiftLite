@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  .placeholder { background: #fff7c2; border-left: 3px solid #f5c518; padding: .5rem .8rem; margin: .5rem 0; display: inline-block; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明</span></h1>
+<p class="en">Bilingual reviewer note required for AI-assisted pull requests. Template: <code>docs/reviewer-note.template.html</code>. 双语审阅说明：AI 参与的 PR 必须随 PR 提交本文件（路径 <code>reviews/PR-&lt;编号&gt;.html</code>）。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd><span class="placeholder">填写，例如 42 / e.g. 42</span></dd>
+  <dt>作者 / Author</dt><dd><span class="placeholder">填写 / fill</span></dd>
+  <dt>日期 / Date</dt><dd><span class="placeholder">YYYY-MM-DD</span></dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd><span class="placeholder">例如 WorkBuddy / Claude Opus 4.6 / GitHub Copilot / ChatGPT / 其他</span></dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p><span class="placeholder">本 PR 做了什么、为什么做，用中文与英文简述。/ What this PR does and why, in both Chinese and English.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<p><span class="placeholder">关键文件与改动点。/ Key files and changes.</span></p>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code><span class="placeholder">path/to/file</span></code></td><td><span class="placeholder">说明 / desc</span></td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：<span class="placeholder">填写 / fill</span></li>
+  <li>参与范围 / Extent：<span class="placeholder">哪些部分由 AI 生成或辅助（精确到函数/文件）。/ Which parts were generated or assisted by AI.</span></li>
+  <li>人工复核 / Human review：<span class="placeholder">本人如何核对 AI 产出（读代码、跑测试、手动验证）。/ How the author verified AI output.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p><span class="placeholder">测试命令与结果（贴关键输出或截图说明）。/ Test commands and results.</span></p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p><span class="placeholder">已知限制、待办、需要 reviewer 重点关注的地方。/ Limitations, TODOs, areas needing reviewer attention.</span></p>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox"> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox"> 测试通过 / Tests pass</li>
+  <li><input type="checkbox"> AI 产出已人工复核 / AI output manually verified</li>
+</ul>
+</body>
+</html>

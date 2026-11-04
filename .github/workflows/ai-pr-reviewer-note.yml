@@ -1,0 +1,80 @@
+name: AI PR Reviewer Note Check
+
+# 校验「AI 参与的 PR」是否随 PR 提交了双语 HTML reviewer 说明。
+# 规则见 docs/AI_POLICY.md。main 分支保护要求本检查（ai-pr-reviewer-note）通过才准合并。
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  ai-pr-reviewer-note:
+    name: ai-pr-reviewer-note
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate AI PR and reviewer note
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          post_comment () {
+            local body="$1"
+            # 去重：已存在含哨兵的评论则跳过，避免每次推送重复留言
+            if gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" 2>/dev/null \
+               | grep -qF '<!-- ai-note-check -->'; then
+              echo "::notice::已有校验评论，跳过重复留言。"
+              return 0
+            fi
+            printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" --body-file -
+          }
+
+          # 1) 读取 AI 参与勾选状态：定位含 <!-- ai-pr --> 标记的行，判断是否被勾选 [x]
+          ai_line=$(printf '%s' "$PR_BODY" | grep -F '<!-- ai-pr -->' || true)
+          if [ -z "$ai_line" ]; then
+            echo "::notice::未检测到 AI 参与标记，视为非 AI PR，跳过校验。"
+            exit 0
+          fi
+          if ! printf '%s' "$ai_line" | grep -qF '[x]'; then
+            echo "::notice::AI 参与未勾选，跳过校验。"
+            exit 0
+          fi
+
+          echo "::notice::检测到 AI 参与 PR，开始校验双语 HTML reviewer 说明。"
+
+          # 2) 校验 reviews/PR-<编号>.html 是否存在于 PR 的 head 提交
+          NOTE_PATH="reviews/PR-${PR_NUMBER}.html"
+          if ! gh api "repos/${REPO}/contents/${NOTE_PATH}?ref=${HEAD_SHA}" >/dev/null 2>&1; then
+            body=$'❌ **缺少双语 HTML reviewer 说明 / Missing bilingual HTML reviewer note**\n\n本 PR 已勾选「AI 参与」，按要求必须随 PR 提交：`reviews/PR-__PRNUM__.html`。\n模板见 `docs/reviewer-note.template.html`。该文件需同时包含中文与英文内容（概述 / AI 参与披露 / 验证 等小节）。\n\nEnglish: This PR is flagged as AI-assisted. You must attach a bilingual HTML reviewer note at `reviews/PR-__PRNUM__.html` (template: `docs/reviewer-note.template.html`). The file must contain both Chinese and English content with key sections (Summary / AI Participation / Verification).\n\n合并已被分支保护阻止，请补充后重新推送。'
+            body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g")"
+            post_comment "$body"
+            echo "::error::缺少 ${NOTE_PATH}，合并被阻止。"
+            exit 1
+          fi
+
+          # 3) 下载并校验双语结构（中英均有 + 含关键小节）
+          html=$(gh api "repos/${REPO}/contents/${NOTE_PATH}?ref=${HEAD_SHA}" --jq '.content' | base64 -d)
+          has_cjk=$(printf '%s' "$html" | grep -qP '[\x{4e00}-\x{9fff}]' && echo 1 || echo 0)
+          has_en=$(printf '%s' "$html" | grep -qiE 'summary|verification|testing|review|disclosure|participation' && echo 1 || echo 0)
+          has_zh_kw=$(printf '%s' "$html" | grep -qE '概述|摘要|披露|验证|测试|审阅|说明' && echo 1 || echo 0)
+          echo "::notice::has_cjk=${has_cjk} has_en=${has_en} has_zh_kw=${has_zh_kw}"
+          if [ "$has_cjk" = 0 ] || [ "$has_en" = 0 ] || [ "$has_zh_kw" = 0 ]; then
+            body=$'❌ **双语 HTML reviewer 说明内容不合规 / Invalid bilingual reviewer note**\n\n文件 `reviews/PR-__PRNUM__.html` 已存在，但缺少必要的双语结构。要求：\n- 同时包含中文与英文；\n- 含关键小节（如 概述/Summary、AI 参与披露/AI Participation、验证/Verification）。\n\nEnglish: The note exists but lacks required bilingual structure (both Chinese and English, with key sections such as Summary / AI Participation / Verification).\n\n合并已被分支保护阻止，请补全后重新推送。'
+            body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g")"
+            post_comment "$body"
+            echo "::error::双语结构不完整，合并被阻止。"
+            exit 1
+          fi
+
+          body=$'✅ **双语 HTML reviewer 说明校验通过 / Bilingual reviewer note verified**\n\n已确认 `reviews/PR-__PRNUM__.html` 存在且含中英双语必要小节。可继续评审。\n\nEnglish: `reviews/PR-__PRNUM__.html` is present and contains the required bilingual sections. Review may proceed.'
+          body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g")"
+          post_comment "$body"
