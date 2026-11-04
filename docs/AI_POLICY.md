@@ -4,13 +4,19 @@
 
 ## 适用范围 / Scope
 
-勾选 PR 模板中的「本 PR 由 AI 参与完成 / This PR was produced with AI assistance」即视为 AI 参与 PR。
-未勾选则不受此政策约束，正常评审即可。
+满足以下任一条件即视为「AI 参与 PR」：
+
+- PR 模板中的「本 PR 含 AI 参与」框被勾选；**或**
+- PR 中附有了 `reviews/PR-<编号>.html` 双语说明文件。
+
+> 不要求人类手动勾选：本规则的首要执行机制是 [`AGENTS.md`](./AGENTS.md)——AI 编码 Agent 在产出 PR 时会自动生成该说明文件，而说明文件本身即触发 CI 校验。勾选框只是可选的辅助声明。
+
+未触发上述任一条件则不受此政策约束，正常评审即可。
 
 ## 提交要求 / Requirement
 
-1. 在 PR 模板勾选 AI 参与框。
-2. 随 PR 在仓库内提交文件 `reviews/PR-<编号>.html`（编号与 PR 号一致）。
+1. 由 AI Agent 产出的 PR：Agent 须按 AGENTS.md 自动生成 `reviews/PR-<编号>.html` 并随 PR 提交。
+2. 人工使用 AI 协助但未走 Agent 流程：建议在 PR 模板勾选 AI 参与框，并随 PR 提交同一说明文件。
 3. 该 HTML 须同时包含中文与英文内容，并至少涵盖以下小节：
    - 概述 / Summary
    - AI 参与披露（工具·模型·范围·人工复核）/ AI Participation Disclosure
@@ -18,7 +24,7 @@
 4. 模板见 [`docs/reviewer-note.template.html`](./reviewer-note.template.html)，复制后填写。
 
 CI 检查 [`ai-pr-reviewer-note`](.github/workflows/ai-pr-reviewer-note.yml) 会在每个 PR 上运行：
-检测到 AI 参与勾选但缺文件 / 文件非双语时判失败并在 PR 评论说明，分支保护据此阻止合并。
+检测到 AI 参与（勾选 或 已附说明）但缺文件 / 文件非双语时判失败并在 PR 评论说明，分支保护据此阻止合并。
 
 ## 设计参照 / Community References
 
@@ -30,7 +36,7 @@ CI 检查 [`ai-pr-reviewer-note`](.github/workflows/ai-pr-reviewer-note.yml) 会
 - **Kubernetes**：描述中包含一句「本 PR 部分由生成式 AI 协助完成」即为充分披露——极简一端。
 - **spec-kit**：要求写明 agent、模型、设置与参与范围，甚至在每条 AI 生成的提交上加 `Assisted-by:` 尾注。
 
-本仓库取中间偏严：默认不强制所有 PR，但对 AI 参与的 PR 要求结构化双语披露，并辅以 CI 硬校验。
+本仓库取中间偏严：默认不强制所有 PR，但对 AI 参与的 PR 要求结构化双语披露，并辅以 CI 硬校验；同时把执行重心放在 AGENTS.md 对模型的约束上，不把手动勾选作为唯一触发条件。
 
 ## 原则 / Principles
 

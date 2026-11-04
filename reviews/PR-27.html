@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #27</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明 — PR #27</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request, per <code>docs/AI_POLICY.md</code> and <code>AGENTS.md</code>. 本文件随 PR 提交，路径 <code>reviews/PR-27.html</code>。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>27</dd>
+  <dt>作者 / Author</dt><dd>WorkBuddy（AI 编码 Agent）产出，仓库 owner 人工复核</dd>
+  <dt>日期 / Date</dt><dd>2026-11-04</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（AI 编码 Agent）</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 把「AI 参与的 PR 必须附双语 HTML reviewer 说明」这条规则，从依赖人类手动勾选 PR 模板，升级为由 <code>AGENTS.md</code> 约束 AI Agent 自动完成。中文：规则重心从「人记得勾」转为「模型按规范自行产出」，人类不再被强制手勾。English: The enforcement重心 shifts from a manual checkbox to an agent-side obligation declared in <code>AGENTS.md</code>; the model auto-generates the bilingual note, so humans are no longer forced to tick a box.</p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>AGENTS.md</code></td><td>新增。约束任何在本仓库工作的 AI 编码 Agent：产出 PR 时必须自动生成 <code>reviews/PR-&lt;编号&gt;.html</code> 双语说明。</td></tr>
+  <tr><td><code>docs/AI_POLICY.md</code></td><td>适用范围改为「勾选 或 已附说明文件」任一即视为 AI PR；明确 Agent 自动产出为主、人工勾选可选。</td></tr>
+  <tr><td><code>.github/PULL_REQUEST_TEMPLATE.md</code></td><td>弱化手动勾选措辞，说明勾选不是硬性前置。</td></tr>
+  <tr><td><code>.github/workflows/ai-pr-reviewer-note.yml</code></td><td>AI 参与判定从「仅看勾选框」改为「勾选 或 已附说明文件」二选一。</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（AI 编码 Agent）。</li>
+  <li>参与范围 / Extent：本次四个文件（AGENTS.md、AI_POLICY.md、PULL_REQUEST_TEMPLATE.md、workflow yml）的起草与改写均由 AI 生成或辅助；分支创建、文件上传、开 PR 等 git 操作由 AI 通过 GitHub API 执行。</li>
+  <li>人工复核 / Human review：仓库 owner 已逐文件核对变更意图与文案，将通过 PR diff 与 CI 结果再次确认后再合入；合并仍需通过分支保护要求的 <code>ai-pr-reviewer-note</code> 检查。</li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>中文：workflow YAML 已用 PyYAML 解析通过；本 PR 已按新规则附上本双语说明，CI（<code>ai-pr-reviewer-note</code>）应以此「说明存在」信号触发校验并通过。English: The workflow YAML parses cleanly under PyYAML. This PR attaches its own bilingual note, so the CI should be triggered by the note-presence signal and report success. Reviewer may confirm the check status on the PR before merging.</p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>中文：本沙箱环境的本地 git 到 github.com 的 TLS 出口被拦截，故本次改动全部经 GitHub Contents API 推送，未走本地 clone；owner 本机执行 <code>git pull</code> 即可同步。English: Local <code>git fetch</code> from this sandbox is blocked by TLS egress, so all changes were pushed via the GitHub Contents API rather than a local clone; a normal <code>git pull</code> on the owner's machine will sync. No other known issues.</p>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox"> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox"> 测试通过 / Tests pass（CI 校验通过）</li>
+  <li><input type="checkbox"> AI 产出已人工复核 / AI output manually verified</li>
+</ul>
+</body>
+</html>
