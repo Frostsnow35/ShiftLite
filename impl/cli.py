@@ -1,6 +1,6 @@
 """ShiftLite 命令行入口。
 
-    python cli.py setup      # 下载模型 → 转 ONNX → 转 IR → INT8 量化 → 拉样例图
+    python cli.py setup      # 下载模型 → 直转 IR → INT8 量化 → 拉样例图
     python cli.py bench      # A/B/C 三组性能对比（延迟 / FPS / 体积）
     python cli.py quality    # 三组输出的质量与结构保真度量
     python cli.py serve      # 启动本地可视化界面
@@ -865,6 +865,16 @@ def cmd_figures(args):
         _p(f"  {p}")
 
 
+# ---------------- review materials ----------------
+
+def cmd_review_materials(args):
+    from core.review import build_review_materials
+    manifest = build_review_materials(args.quality, args.output, args.image_root,
+                                      args.sample_list)
+    _p(f"已整理 {len(manifest['samples'])} 张待复核材料 → {args.output}")
+    _p("人工填写请另存 human_review.csv；命令不会填写或覆盖人工结论。")
+
+
 # ---------------- serve ----------------
 
 def cmd_serve(args):
@@ -918,6 +928,13 @@ def main():
 
     fg = sub.add_parser("figures", help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
     fg.set_defaults(func=cmd_figures)
+
+    rv = sub.add_parser("review-materials", help="从已有 quality-v2 结果整理复核图片、清单和空白 CSV，不重跑模型")
+    rv.add_argument("--quality", type=Path, default=RESULTS / 'quality.json')
+    rv.add_argument("--output", type=Path, required=True, help="独立材料目录；不同实验请用新目录")
+    rv.add_argument("--image-root", type=Path, default=ROOT, help="JSON 中 input 路径的基准目录（impl）")
+    rv.add_argument("--sample-list", type=Path, help="可选 JSON：{samples: [样本ID, ...]}，按给定顺序导出")
+    rv.set_defaults(func=cmd_review_materials)
 
     args = ap.parse_args()
     sys.path.insert(0, str(ROOT))

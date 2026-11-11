@@ -1,0 +1,487 @@
+[
+  {
+    "sample": "n02381460_1090",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9932,
+        "box": [
+          134.6,
+          97.6,
+          168.3,
+          131.0
+        ],
+        "candidate_count": 2,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": 0.2763,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "B": {
+        "found": false,
+        "score": 0.2765,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "C": {
+        "found": true,
+        "score": 0.5692,
+        "box": [
+          136.0,
+          98.3,
+          171.3,
+          129.5
+        ],
+        "candidate_count": 1,
+        "label": "zebra",
+        "reason": null
+      }
+    },
+    "comparison_file": "n02381460_1090.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_1260",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.7009,
+        "box": [
+          0.0,
+          0.0,
+          248.7,
+          256.0
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": 0.4371,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "B": {
+        "found": false,
+        "score": 0.4371,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "C": {
+        "found": true,
+        "score": 0.7076,
+        "box": [
+          1.3,
+          0.0,
+          247.0,
+          256.0
+        ],
+        "candidate_count": 1,
+        "label": "zebra",
+        "reason": null
+      }
+    },
+    "comparison_file": "n02381460_1260.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_1350",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9922,
+        "box": [
+          52.6,
+          86.9,
+          204.1,
+          201.8
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": 0.3237,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "B": {
+        "found": false,
+        "score": 0.3241,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "C": {
+        "found": true,
+        "score": 0.5748,
+        "box": [
+          50.9,
+          86.6,
+          200.9,
+          201.1
+        ],
+        "candidate_count": 1,
+        "label": "zebra",
+        "reason": null
+      }
+    },
+    "comparison_file": "n02381460_1350.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_1540",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9956,
+        "box": [
+          170.9,
+          120.1,
+          196.9,
+          140.9
+        ],
+        "candidate_count": 9,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "B": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_1540.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_1660",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.998,
+        "box": [
+          0.7,
+          1.2,
+          191.3,
+          256.0
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "B": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_1660.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_1750",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9967,
+        "box": [
+          125.1,
+          131.8,
+          159.0,
+          173.3
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": 0.0964,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "B": {
+        "found": false,
+        "score": 0.0966,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "C": {
+        "found": true,
+        "score": 0.9876,
+        "box": [
+          125.0,
+          131.1,
+          162.7,
+          174.0
+        ],
+        "candidate_count": 1,
+        "label": "zebra",
+        "reason": null
+      }
+    },
+    "comparison_file": "n02381460_1750.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_3010",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": false,
+        "score": 0.1001,
+        "box": null,
+        "candidate_count": 0,
+        "label": "horse",
+        "reason": "below_score_threshold"
+      },
+      "A": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "B": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_3010.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_3120",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.6666,
+        "box": [
+          181.8,
+          66.8,
+          256.0,
+          241.8
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "B": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_3120.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_440",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9557,
+        "box": [
+          72.3,
+          7.5,
+          213.8,
+          256.0
+        ],
+        "candidate_count": 1,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "B": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_440.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  },
+  {
+    "sample": "n02381460_7250",
+    "source": "upstream quality.json A/C missing",
+    "current_detections": {
+      "X": {
+        "found": true,
+        "score": 0.9972,
+        "box": [
+          199.9,
+          116.9,
+          245.7,
+          171.9
+        ],
+        "candidate_count": 2,
+        "label": "horse",
+        "reason": null
+      },
+      "A": {
+        "found": false,
+        "score": 0.1675,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "B": {
+        "found": false,
+        "score": 0.1673,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "below_score_threshold"
+      },
+      "C": {
+        "found": false,
+        "score": null,
+        "box": null,
+        "candidate_count": 0,
+        "label": "zebra",
+        "reason": "no_target_detection"
+      }
+    },
+    "comparison_file": "n02381460_7250.png",
+    "human_status": "pending",
+    "reviewer": null,
+    "conclusion": null
+  }
+]

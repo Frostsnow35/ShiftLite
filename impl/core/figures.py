@@ -266,6 +266,7 @@ def quality_table(results: Path, out: Path) -> Path:
     kid = d["kid"]
     mask = d["mask"]
     disc = d["zebra_discrimination"]
+    dice_n = mask['detected_pairs'] if 'mean_dice_ac' in mask else '未记录'
 
     def kid_str(key: str) -> str:
         k = kid[key]
@@ -288,6 +289,7 @@ def quality_table(results: Path, out: Path) -> Path:
         f"| 迁移质量 | KID(B) | {kid_str('b_vs_real_zebra')} | FP32 批 |",
         f"| 迁移质量 | KID(C) | {kid_str('c_vs_real_zebra')} | INT8 批 |",
         f"| 输出一致性 | 掩码 IoU(a,c) | {_metric_text(mask['mean_iou_ac'], 4)} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
+        f"| 输出一致性 | 掩码 Dice(a,c) | {_metric_text(mask.get('mean_dice_ac'), 4)} | 有效 {dice_n}/{lp['n_images']} 对；旧 JSON 未计算时显示缺失 |",
         f"| 输出一致性（旧口径） | 背景 SSIM(a,c) | {_metric_text(mask['mean_background_ssim_ac'], 4)} | 前景填充后整图 SSIM；严格共同背景另表 |",
         f"| 任务保真 | 斑马判别 top1（B / C） | {disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | n={disc['b']['n']}；差异应据实解释 |",
         f"| 异常登记 | SSIM(b,c)<0.80 | {d['anomalies']['count']} 例 | 见 fig_e3_anomalies.png |",

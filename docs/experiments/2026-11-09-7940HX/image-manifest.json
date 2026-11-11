@@ -1,0 +1,58 @@
+{
+  "quality_sha256": "5235e5b7cfa51d6bd1ab0b6d9d066b24789fb2d18a56c630fea9d0d09572915f",
+  "evaluation_date": "2026-11-09",
+  "human_review_date": "2026-11-10",
+  "image_bundle": "ShiftLite_原有10张人工复核材料_2026-11-11.zip",
+  "samples": [
+    {
+      "sample": "n02381460_1090",
+      "file": "images/n02381460_1090.png",
+      "sha256": "e3f98b9c59786cd8c5843fd78f8a72689c0032a2e78dc047d1559a195aa3a70e"
+    },
+    {
+      "sample": "n02381460_1260",
+      "file": "images/n02381460_1260.png",
+      "sha256": "de3860ac29f59141db7923bd3163d10d9eb9bb88b2a53b469f3e3c23adda3737"
+    },
+    {
+      "sample": "n02381460_1350",
+      "file": "images/n02381460_1350.png",
+      "sha256": "d07b612f818495517aca1ccbf34117dea5ca979cc5e94b62c970bc6717ea3bbc"
+    },
+    {
+      "sample": "n02381460_1540",
+      "file": "images/n02381460_1540.png",
+      "sha256": "f6b9a258b7c2a98756fa671e4b5402231c1ec64425693e59722cdb4896879172"
+    },
+    {
+      "sample": "n02381460_1660",
+      "file": "images/n02381460_1660.png",
+      "sha256": "aa9fab79e98b6beeb4001105a6d1d19538ef3943b29389bb068ce7db205b272b"
+    },
+    {
+      "sample": "n02381460_1750",
+      "file": "images/n02381460_1750.png",
+      "sha256": "318235253b602fec5d0ec1b089f85189fef7795e8567ead04f705f58d77756f1"
+    },
+    {
+      "sample": "n02381460_3010",
+      "file": "images/n02381460_3010.png",
+      "sha256": "c44708619c245f45dd8396681967872110756d641ae7596dd2896f2060967709"
+    },
+    {
+      "sample": "n02381460_3120",
+      "file": "images/n02381460_3120.png",
+      "sha256": "74c84e61b377cf1108bc2442e5bd0adfd952c7db7efbce1fc7947cc939dc9b2b"
+    },
+    {
+      "sample": "n02381460_440",
+      "file": "images/n02381460_440.png",
+      "sha256": "f0cc3ad1dbdf3553d15b9b0acfa3778aa675880e539740fe0451d84e187d329b"
+    },
+    {
+      "sample": "n02381460_7250",
+      "file": "images/n02381460_7250.png",
+      "sha256": "2a461a93e62d3a45e452a7e10c386a76e82c725ebd94541bcbbc5113f288b607"
+    }
+  ]
+}

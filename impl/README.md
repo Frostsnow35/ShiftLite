@@ -21,13 +21,22 @@
 
 ## 二、跑起来
 
-### 本机 T0/T1 运行方式（2026-11-09）
+### T0/T1 运行与复核交付（2026-11-11）
 
-从 `D:\ShiftLite` 的 PowerShell 使用 `& .\impl\run-local.ps1 -CliArgs @('serve')`。
-该脚本同步源代码到独立运行副本，模型/数据/本机结果保存在
-`D:\ShiftLite-runs\t0-t1-2026-11-09\impl\artifacts`，不覆盖本仓库的历史实验 JSON。
-Python 默认为 `D:\ShiftLite-envs\cpu-312\python.exe`；其他机器用 `-Python`、`-RunRoot` 指定路径。
-运行期间不要同时修改或同步副本代码。
+首次安装、独立副本、缓存路径、完整评测与复核材料导出见
+[通用复现指南](../docs/REPRODUCING_T0_T1.md)。Windows 可从仓库根运行
+`& .\impl\run-local.ps1 -CliArgs @('serve')`；需先安装依赖并完成 setup。
+脚本优先使用仓库 `.venv\Scripts\python.exe`，否则使用 PATH 中的 python；
+默认运行副本位于仓库同级 `<仓库名>-runs/local`，不复制历史 artifacts。
+可用 `-Python`、`-RunRoot`、`-TorchHome` 分别指定解释器、运行目录和权重缓存。
+缓存默认尊重已有 TORCH_HOME，否则放在运行目录的 cache/torch；脚本退出后恢复环境变量。
+模型、数据与本机新结果都留在运行副本。运行期间不要同时修改或同步副本代码。
+
+已有 quality-v2 结果可用 `python cli.py review-materials --output <新材料目录>`
+导出机器清单、原图/掩码对照和空白 CSV，无需重新推理。
+同一目录拒绝混入不同质量 JSON、样本集合或变化后的图片；不改写人工 CSV 或已有模板。
+原有 10 张的人工记录入口见
+[实验与人工复核归档](../docs/experiments/2026-11-09-7940HX/README.md)。
 
 T1 的 `quality-v2` 在 `deep.structure` 中分别记录输入 `x→a/b/c` 与输出 `a→c`
 的 IoU、Dice、共同背景 SSIM，逐指标保存有效/总样本数。共同背景只使用两侧前景
