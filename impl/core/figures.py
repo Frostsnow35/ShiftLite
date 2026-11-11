@@ -81,8 +81,18 @@ def fig_e1_samples(results: Path, out: Path) -> Path:
                  quality_dir / f"{stem}_B.png", quality_dir / f"{stem}_C.png"]
         miss = [p.name for p in paths if not p.exists()]
         if miss:
-            raise SystemExit(
-                f"E1 拼图缺素材：{miss}。先跑 `python cli.py quality` 生成三组输出图")
+            from core.backends import Runtime
+            from core.utils import load_image, to_tensor, to_image
+            models = ROOT / 'artifacts/models'
+            rt = Runtime(models / 'horse2zebra.pth', models / 'horse2zebra.xml',
+                         models / 'horse2zebra_int8.xml')
+            if not all(rt.availability().values()):
+                raise SystemExit(f'E1 缺素材 {miss}，且 A/B/C 模型不完整；先运行 setup')
+            quality_dir.mkdir(parents=True, exist_ok=True)
+            tensor = to_tensor(load_image(hp))
+            for group, dest in zip(('A', 'B', 'C'), paths[1:]):
+                if not dest.exists():
+                    to_image(rt.infer(tensor, group)).save(dest)
         arrs = [np.asarray(Image.open(p).convert("RGB"), dtype=np.float32)
                 for p in paths]
         for j, p in enumerate(paths):
@@ -155,6 +165,14 @@ def fig_e3_anomalies(results: Path, out: Path) -> Path:
     quality_dir = results / "quality"
 
     n = len(an)
+    if n == 0:
+        fig, ax = plt.subplots(figsize=(8, 2))
+        ax.axis('off')
+        ax.text(.5, .5, '本次无 SSIM 阈值异常；不代表全部样本已人工复核', ha='center')
+        dest = out / 'fig_e3_anomalies.png'
+        fig.savefig(dest, dpi=200)
+        plt.close(fig)
+        return dest
     fig, axes = plt.subplots(n, 3, figsize=(9.6, 2.9 * n))
     if n == 1:
         axes = axes.reshape(1, 3)
@@ -181,7 +199,7 @@ def fig_e3_anomalies(results: Path, out: Path) -> Path:
         axes[i][0].set_ylabel(name, fontsize=8.5)
         axes[i][1].set_xlabel(
             f"SSIM(b,c)={m['ssim_bc']:.3f}  LPIPS(b,c)={m['lpips']['L_bc']:.3f}  "
-            f"掩码IoU(a,c)={m['mask_iou_ac']:.3f}  背景SSIM(a,c)={m['background_ssim_ac']:.3f}",
+            f"输出IoU(a,c)={_metric_text(m.get('mask_iou_ac'))}  旧背景SSIM(a,c)={_metric_text(m.get('background_ssim_ac'))}",
             fontsize=7.5)
 
     fig.tight_layout(rect=(0, 0, 1, 0.94 if n > 1 else 0.88))
@@ -216,7 +234,7 @@ def fig_e4_layers(results: Path, out: Path) -> Path:
     ax1.set_ylabel("余弦相似度")
     ax1.set_ylim(min(cos) - 0.005, 1.002)
     ax1.set_title("逐层余弦相似度（越接近 1 越一致）", fontsize=10)
-    ax1.annotate("残差块 01→09：0.9994 → 0.9644 单调下降",
+    ax1.annotate(f"残差块 01→09：{by_name['resblock_01']['cosine']:.4f} → {by_name['resblock_09']['cosine']:.4f}",
                  xy=(7, cos[7]), xytext=(4.2, min(cos) + 0.012),
                  fontsize=8, arrowprops=dict(arrowstyle="->", lw=0.8))
 
@@ -225,13 +243,17 @@ def fig_e4_layers(results: Path, out: Path) -> Path:
     ax2.set_xticks(x, [r["layer"] for r in rows], rotation=45, ha="right", fontsize=8)
     ax2.set_title("逐层相对 L2 误差（越大漂移越深）", fontsize=10)
 
-    fig.text(0.5, 0.005, "灰色带 = 9 个残差块段；量化误差沿残差块深度逐级累积",
+    fig.text(0.5, 0.005, "灰色带 = 9 个残差块段；表示漂移不等同于语义因果归因",
              ha="center", fontsize=8, color="#555555")
     fig.tight_layout(rect=(0, 0.02, 1, 0.95))
     dest = out / "fig_e4_layers.png"
     fig.savefig(dest, dpi=200)
     plt.close(fig)
     return dest
+
+
+def _metric_text(value, digits=3):
+    return '缺失' if value is None else f'{value:.{digits}f}'
 
 
 def quality_table(results: Path, out: Path) -> Path:
@@ -265,15 +287,39 @@ def quality_table(results: Path, out: Path) -> Path:
         f"| 迁移质量 | FID(C vs 真实斑马) | {fid['c_vs_real_zebra']:.2f} | INT8 批 |",
         f"| 迁移质量 | KID(B) | {kid_str('b_vs_real_zebra')} | FP32 批 |",
         f"| 迁移质量 | KID(C) | {kid_str('c_vs_real_zebra')} | INT8 批 |",
-        f"| 结构（前景） | 掩码 IoU(a,c) | {mask['mean_iou_ac']:.4f} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
-        f"| 结构（背景） | 背景 SSIM(a,c) | {mask['mean_background_ssim_ac']:.4f} | 掩码外区域 |",
-        f"| 任务保真 | 斑马判别 top1（B / C） | {disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | n={disc['b']['n']}，量化前后持平 |",
+        f"| 输出一致性 | 掩码 IoU(a,c) | {_metric_text(mask['mean_iou_ac'], 4)} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
+        f"| 输出一致性（旧口径） | 背景 SSIM(a,c) | {_metric_text(mask['mean_background_ssim_ac'], 4)} | 前景填充后整图 SSIM；严格共同背景另表 |",
+        f"| 任务保真 | 斑马判别 top1（B / C） | {disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | n={disc['b']['n']}；差异应据实解释 |",
         f"| 异常登记 | SSIM(b,c)<0.80 | {d['anomalies']['count']} 例 | 见 fig_e3_anomalies.png |",
         "",
         f"记号：a=PyTorch FP32，b=OV FP32，c=OV INT8；`metrics_source={q['metrics_source']}`。",
     ]
     dest = out / "quality_table.md"
     dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if d.get('structure'):
+        structure_table(q, out)
+    return dest
+
+
+def structure_table(q: dict, out: Path) -> Path:
+    """v2 口径独立成表，明确分母与人工复核状态。"""
+    report = q['deep']['structure']
+    lines = ['# 结构评测 v2', '',
+             'x=输入马图；a/b/c=三组生成图。掩码为检测器估计，不是人工真值。',
+             'IoU/Dice 采用各侧最高置信度目标；多实例对应关系须人工复核。',
+             '共同背景仅平均两侧前景并集外的完整 11×11 SSIM 窗口，至少 64 窗口。', '',
+             '| 比较 | 指标 | 均值 | 有效/总样本 |', '|---|---|---:|---:|']
+    for pair, values in report['pairs'].items():
+        label = ('输入保真 ' if pair.startswith('x') else '输出一致性 ') + pair
+        for metric, item in values.items():
+            value = '缺失' if item['mean'] is None else f"{item['mean']:.6f}"
+            lines.append(f"| {label} | {metric} | {value} | {item['n_valid']}/{item['n_total']} |")
+    lines += ['', f"检测失败样本：{report['n_failure_samples']}；待复核样本：{len(report['review_queue'])}。",
+              '人工复核尚未完成。缺失值不填零；异常样本不从全量指标中剔除。',
+              '分类器使用 ResNet50 IMAGENET1K_V1 配套预处理；不可直接混用旧判别率。',
+              'FID 沿用历史 torchvision 特征实现，不与外部标准 FID 数值直接比较。']
+    dest = out / 'structure_table_v2.md'
+    dest.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return dest
 
 

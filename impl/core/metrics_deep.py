@@ -13,7 +13,7 @@
 - FID / KID：InceptionV3 的 2048 维池化特征，与真实目标域比较。
 - 结构保真：**Canny** 边缘 SSIM（不是梯度幅值）+ **Mask R-CNN** 实例掩码 IoU
   + 掩码外背景 SSIM + **ResNet-50** 斑马判别准确率。
-- 异常样本单独登记，不混在全量均值里。
+- 异常样本单独登记，仍计入全量均值；检测失败不填零。
 
 用法：
     python -m core.metrics_deep --self-test
@@ -259,18 +259,22 @@ def instance_masks(images: list[np.ndarray], label: str = _MASK_LABEL,
     # 传 batch 会报 "expected np.ndarray (got Tensor)" 之类的错。
     # 但整批塞进去会让检测头一次性分配巨量中间特征（120 张实测分配 4.9 GB
     # 失败，2026-10-24），必须分块前向。
-    outs = []
-    with torch.no_grad():
-        for i in range(0, len(images), 4):
-            batch = (to_batch(images[i:i + 4]) + 1.0) / 2.0
-            outs.extend(model([t for t in batch]))
+    def predictions():
+        with torch.no_grad():
+            for i in range(0, len(images), 4):
+                batch = (to_batch(images[i:i + 4]) + 1.0) / 2.0
+                yield from model([t for t in batch])
 
     results = []
-    for out in outs:
+    for out in predictions():
         keep = (out["labels"] == cat_id) & (out["scores"] >= score_thresh)
         if not bool(keep.any()):
+            candidates = out['scores'][out['labels'] == cat_id]
             results.append({"mask": np.zeros((size, size), bool),
-                            "score": 0.0, "box": None, "found": False})
+                            "score": round(float(candidates.max()), 4) if len(candidates) else None,
+                            "candidate_count": 0, "label": label,
+                            "reason": 'below_score_threshold' if len(candidates) else 'no_target_detection',
+                            "box": None, "found": False})
             continue
         best = int(torch.argmax(out["scores"][keep]))
         m = (out["masks"][keep][best, 0].numpy() >= 0.5)
@@ -282,7 +286,9 @@ def instance_masks(images: list[np.ndarray], label: str = _MASK_LABEL,
                         "score": round(float(out["scores"][keep][best]), 4),
                         "box": [round(float(v), 1)
                                 for v in out["boxes"][keep][best].tolist()],
-                        "found": True})
+                        "candidate_count": int(keep.sum()), "label": label,
+                        "reason": None if m.any() else 'empty_mask',
+                        "found": bool(m.any())})
     return results
 
 
@@ -318,7 +324,8 @@ def target_probabilities(images: list[np.ndarray],
     hits = label_indices()
 
     out = []
-    x = (to_batch(images) + 1.0) / 2.0  # 分类网络输入 0~1
+    # 使用权重配套 resize/crop/normalize，不能只将像素缩放到 0~1。
+    x = w.transforms()((to_batch(images) + 1.0) / 2.0)
     for i in range(0, len(images), batch_size):
         with torch.no_grad():
             logits = m(x[i:i + batch_size])

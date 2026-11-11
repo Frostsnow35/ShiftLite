@@ -21,6 +21,27 @@
 
 ## 二、跑起来
 
+### 本机 T0/T1 运行方式（2026-11-09）
+
+从 `D:\ShiftLite` 的 PowerShell 使用 `& .\impl\run-local.ps1 -CliArgs @('serve')`。
+该脚本同步源代码到独立运行副本，模型/数据/本机结果保存在
+`D:\ShiftLite-runs\t0-t1-2026-11-09\impl\artifacts`，不覆盖本仓库的历史实验 JSON。
+Python 默认为 `D:\ShiftLite-envs\cpu-312\python.exe`；其他机器用 `-Python`、`-RunRoot` 指定路径。
+运行期间不要同时修改或同步副本代码。
+
+T1 的 `quality-v2` 在 `deep.structure` 中分别记录输入 `x→a/b/c` 与输出 `a→c`
+的 IoU、Dice、共同背景 SSIM，逐指标保存有效/总样本数。共同背景只使用两侧前景
+并集外完整的 11×11 窗口，至少 64 个；旧 `background_ssim_ac` 保留为历史填充算法。
+每侧取置信度最高目标，输入为 horse、输出为 zebra，检测阈值与掩码阈值均为 0.5。
+多实例对应关系未经自动证明，和检测失败一起进入 `results/structure_review/` 的人工待复核清单。
+缺失值为 null，不填零、不自动判为生成畸形，也不代签真人复核。
+
+ResNet50 使用权重配套预处理；逐图 Canny 与梯度字段分开。新判别率不得与旧算法混作同一批。
+FID 保持原 torchvision 特征实现，不能直接与外部标准 FID 排名比较。
+测试入口：在 `impl` 下运行 `python -m unittest discover -s tests -v`。
+
+以下为原始通用安装步骤和历史结果，平台及日期仍按原记录保留。
+
 ```bash
 # 1. 装依赖（CPU 版 torch，约 250MB）
 pip install -r requirements.txt
@@ -206,7 +227,7 @@ B 相对 A = 1.17× / 1.40× / 1.39×，**在噪声内跨过 1.0，本机不能�
 
 - **LPIPS(a,b)** —— 转换本身引入的差异，应≈0；偏大说明转换有 bug，不是量化的锅。
 - **LPIPS(b,c)** —— 量化本身引入的差异，核心指标。
-- **LPIPS(a,c)** —— 原版到终版的总差异，理论约等于前两项之和。
+- **LPIPS(a,c)** —— 原版到终版的总差异，须独立计算，不能假定等于前两项之和。
 - **FID / KID** —— 与真实目标域的**特征分布距离**，**不等于"逼真度"**。
 - **掩码 IoU** —— 按类名读取类别索引；只能用 COCO 版 Mask R-CNN（VOC 21 类没有 zebra）。
 - **FP16** —— i5-1340P 无 AVX512-FP16，CPU 上不加速、只省体积；仅作核显对照。

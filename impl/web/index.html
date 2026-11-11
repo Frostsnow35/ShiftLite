@@ -230,8 +230,8 @@
     <header class="page__head">
       <p class="eyebrow">E3 / E4 · 全量评测</p>
       <h2 class="page__title">质量评测</h2>
-      <p class="page__lede">三路同输入出图后逐对比较：a=PyTorch FP32、b=OpenVINO FP32、c=OpenVINO INT8。
-        差异被拆成「转换引入」与「量化引入」两段，避免把两者混为一谈。</p>
+      <p class="page__lede">x=输入马图；a=PyTorch FP32、b=OpenVINO FP32、c=OpenVINO INT8 生成图。
+        x→a/b/c 衡量输入保真，a→c 衡量输出一致性；转换与量化的感知距离分别计算，不作加法分解。</p>
     </header>
 
     <div class="notice" id="qualityNotice" role="status"></div>
@@ -265,11 +265,11 @@
         <figure class="fig">
           <div class="chart" id="structChart"></div>
           <figcaption class="fig__cap"><span class="fig__no"></span>结构保真四项，越接近 1 越好。
-            边缘 SSIM 只在 Canny 边缘图上比较，过滤纹理只比轮廓。</figcaption>
+            Canny 边缘 SSIM 同时可能响应轮廓与条纹，不能单凭该值认定结构保持。</figcaption>
         </figure>
         <p class="panel__note" id="note-struct" hidden>
-          <b>SSIM</b>：全图结构相似度。<b>边缘 SSIM</b>：只在 Canny 边缘图上比较，过滤纹理只比轮廓，
-          用来判断主体轮廓是否被改写。两者背离说明变化集中在纹理而非结构。
+          <b>SSIM</b>：全图结构相似度。<b>边缘 SSIM</b>：在 Canny 边缘图上比较，条纹也会产生边缘。
+          输入/输出的掩码指标、背景指标与人工复核需要结合判断。
         </p>
       </section>
     </div>
@@ -283,8 +283,8 @@
       <figure class="fig">
         <div class="chart" id="layerChart"></div>
         <figcaption class="fig__cap"><span class="fig__no"></span>15 个探针层按网络前向序排列（layers.json 为字母序，
-          此处已重排），阴影段为 9 个残差块。余弦单调下降、相对 L2 单调上升，即量化误差沿深度逐级累积
-          而非集中在某一层。</figcaption>
+          此处已重排），阴影段为 9 个残差块。曲线展示各层的数值漂移；是否单调变化应以本次读数为准，
+          不能仅凭聚合曲线判断视觉失真的原因。</figcaption>
       </figure>
       <div class="layer-tools">
         <button class="chip-btn" id="layerReplay">重播层序扫描</button>
@@ -293,9 +293,9 @@
       <div class="layer-readout" id="layerReadout" aria-live="polite"></div>
       <p class="panel__note" id="note-layer" hidden>
         <b>做法</b>：同一批图分别过 FP32 与「插入伪量化节点」的 INT8 模拟图，在 15 个探针层取特征张量，
-        逐层算余弦相似度与相对 L2 范数。<b>读法</b>：余弦随深度单调下降、相对误差单调上升，说明量化误差在残差块里逐级累积，
-        而不是集中在某一层。探针层取自 ResNet 生成器的下采样段、9 个残差块与上采样段，
-        尾部解码层负责把层内漂移「翻译」成肉眼可见的纹理差别。
+        逐层算余弦相似度与相对 L2 范数。<b>读法</b>：余弦越低或相对 L2 越高，说明该层两组特征的数值差异越大。
+        探针层取自 ResNet 生成器的下采样段、9 个残差块与上采样段；
+        这些聚合量不证明误差单调累积，也不直接证明具体视觉失真由哪一层造成。
       </p>
     </section>
 
