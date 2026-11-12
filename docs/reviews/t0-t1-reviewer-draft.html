@@ -40,8 +40,4 @@ The remaining 85 candidates, including six additional detection-failure samples,
 <h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
 <p>检测掩码不是真值；最高置信度不保证跨图同一主体。缺失保留 null；有条纹不等于迁移成功，检测失败不等于生成畸形。人工意见仅适用于附件哈希对应的原图，不能复制到重跑输出。背景 v2 与旧填充算法、分类器新旧预处理不可混用。FID/KID 保留历史特征实现，不用于跨论文标准 FID 比较。性能仅代表特定平台与负载。</p>
 <p class="en">Detector masks are proxies, and highest-confidence selection does not prove instance correspondence. Missing values remain null. Stripes do not establish successful translation, and detection failure does not establish malformed generation. Human observations are bound to the archived image hashes. Background protocols and classifier preprocessing versions must not be mixed. Legacy FID/KID features are retained and are not directly comparable to standard paper benchmarks. Performance is platform- and workload-dependent.</p>
-<h2>六、审阅清单 / Reviewer Checklist</h2>
-<ul><li>待人工审查代码与指标语义。<span class="en">Human review of code and metric semantics is pending.</span></li>
-<li>确认附件可访问、签名和待讨论状态如实披露。<span class="en">Verify attachment accessibility and accurate disclosure of signatures and unresolved observations.</span></li>
-<li>本草稿不宣称 #20 已可关闭或修改已获准合入。<span class="en">This draft does not claim that issue #20 is ready to close or that the changes are approved for merging.</span></li></ul>
 </body></html>
