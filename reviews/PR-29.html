@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR-29 AI Reviewer Note</title>
+</head>
+<body>
+<h1>AI PR Reviewer Note / AI PR 审阅说明</h1>
+
+<h2>一、概述 / Summary</h2>
+<p>本次修改修复了 CI 工作流在只读令牌场景下尝试写 PR 评论导致任务异常失败的问题，并补充本 PR 的双语 reviewer 说明文件。</p>
+<p>These changes fix the CI workflow so it no longer crashes when posting PR comments with a read-only token, and add the required bilingual reviewer note for this PR.</p>
+
+<h2>二、变更内容 / Changes</h2>
+<ul>
+  <li><code>.github/workflows/ai-pr-reviewer-note.yml</code>：将 PR 评论发布改为“尽力而为”；评论失败时记录 warning 并继续执行真正的校验逻辑。</li>
+  <li><code>reviews/PR-29.html</code>：新增本 PR 的中英文审阅说明。</li>
+</ul>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：GitHub Copilot Coding Agent。</li>
+  <li>参与范围 / Extent：工作流脚本小范围修改与说明文件撰写。</li>
+  <li>人工复核 / Human review：已人工检查失败日志、变更内容和命令执行结果。</li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<ul>
+  <li>通过 GitHub Actions 日志确认根因为 <code>Resource not accessible by integration (addComment)</code>。</li>
+  <li>本地运行针对性检查：<code>git diff --check</code>，并人工复核工作流脚本逻辑。</li>
+</ul>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>当令牌具备写权限时，评论仍会正常发布；当令牌只读时将仅输出 warning，不影响校验成败判定。</p>
+<p>When write permission is available, the workflow still posts comments. With read-only tokens, it now emits a warning without masking the real check result.</p>
+</body>
+</html>

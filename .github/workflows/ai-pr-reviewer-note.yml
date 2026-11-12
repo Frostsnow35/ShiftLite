@@ -38,7 +38,9 @@ jobs:
               echo "::notice::已有校验评论，跳过重复留言。"
               return 0
             fi
-            printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" -R "${REPO}" --body-file -
+            if ! printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" -R "${REPO}" --body-file -; then
+              echo "::warning::无法写入 PR 评论（可能是只读 token 或 fork PR），继续执行校验。"
+            fi
           }
 
           NOTE_PATH="reviews/PR-${PR_NUMBER}.html"
