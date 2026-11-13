@@ -1,0 +1,156 @@
+{
+  "base_commit": "c998232bf34c053112ec5a45e1708e0981f4ac47",
+  "uncommitted_changes_at_evaluation": true,
+  "evaluation_date": "2026-11-09",
+  "device": "AMD Ryzen 9 7940HX",
+  "os": "Windows 11 build 26300",
+  "python": "3.12.4",
+  "torch": "2.14.1+cpu",
+  "torchvision": "0.29.1+cpu",
+  "openvino": "2026.4.1",
+  "nncf": "3.4.0",
+  "power": "AC / balanced",
+  "quality_sha256": "5235e5b7cfa51d6bd1ab0b6d9d066b24789fb2d18a56c630fea9d0d09572915f",
+  "evaluated_source_hashes": {
+    "cli.py": "612c4880a4829ae06620a1a4b3e5a51d56c6c2376b13300e8dfa2204b73e2626",
+    "server.py": "26d45d633d1cb284c75e50707ab762d9f6cb1c71ec5d0319ba4e169e85c34451",
+    "core/backends.py": "16859eae8d1754359f8f09429fb25f03572b281ea758d26e0b561d38090ff867",
+    "core/convert.py": "86c53d33ba5ea0e5a12dc534b13fb0e8d1e31c76e120035a6d37705bb43e9a12",
+    "core/figures.py": "e0aeaf37e3494bb721af858e4bbe3070c811d23710420c44541b31c96737d7ee",
+    "core/layers.py": "fae6604eb9b35bddb60640e535794ae4878dc017eb91d6d41e662eb74f0c09d8",
+    "core/mem.py": "70744b591464bc94e0c829505045cfc0e9cf0b42c4dca1e7d063af2f697e3d11",
+    "core/metrics.py": "d4c23253fa8cb92f4de7f002e540a417fa082f40f16f29e40b2c3f91123999df",
+    "core/metrics_deep.py": "ce1e67193d64146c77927350f11694867ab10a382e293de16741aa1d160f421d",
+    "core/model.py": "c83c0724ba56353a72638659d77ac2ee7509b4373e71bbcca724e867fea05bca",
+    "core/quantize.py": "6541ab530ab024c5d942493f3fdc887a8ab8b8db2155971e3dbd17260d03bb61",
+    "core/structure.py": "21b0d0b16baaf3aa109b703ba8d7a1c923d3fd99d30f0d196c7490a6f8534eb1",
+    "core/utils.py": "68afbfc6df6f3750d844b781f312a6ed20e7543deb8f7b905d831fd418d56b8e",
+    "core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/test_quality_contract.py": "e4f8f3e9223a97f5c7efcc568913566ab4d704309510f496bc1d62c39fad940c",
+    "tests/test_structure.py": "e91a7e47e8a75ab19e535eda39a3f7829ffbc0f548aaaca92bf89b82a22bc736",
+    "web/app.js": "74d50fda2d85d1249f19ed31ee7d9930ea9181856bc9dbf88ca28cc25fefb7e6",
+    "web/index.html": "d5925619166618afb22ba4b0b3ffb9211ba07cfdb8f02c014aa12e45033d1836",
+    "web/style.css": "f1283c750f7a2ca59320af79946673321aa1a02a3426bd4417939284601c2ef3"
+  },
+  "model_hashes": {
+    "convert_report.json": "2a7a4d218d0e969f306224c4e13c061dfea3f473cd0a43f3a5347eb73f0baf69",
+    "horse2zebra_int8.bin": "2f20b26b960c1902b796b10beb6a8faa5c611e597eb2e2ca5219fc4be01a6650",
+    "horse2zebra_int8.xml": "f37eff55a42887d020b0dbcf314d7fe28cd1cbabf74a948d1ba693f36a9efe05",
+    "horse2zebra.bin": "c6abd9f226070de8acb0012e0e2555d47f94fdce7425c4538364bffb474aec40",
+    "horse2zebra.pth": "5bfc34b154035be1cd592cd273fdf328810bee4756044c9cf7deb8d4b6d2fadb",
+    "horse2zebra.xml": "4c6289ac1691bbfcdc6cc0f3853c59845b88776a72798ac732f540ef91efc3fc",
+    "quantize_report.json": "587e00992eaef4c952a5e384791a6730b4ee72e69a3efd3ea9d23bb55771d4d7"
+  },
+  "evaluation": {
+    "quality_samples": 120,
+    "reference_samples": 140,
+    "metrics_source": "real",
+    "errors": [],
+    "structure": {
+      "x_a": {
+        "iou": {
+          "mean": 0.551426,
+          "n_valid": 104,
+          "n_total": 120
+        },
+        "dice": {
+          "mean": 0.614378,
+          "n_valid": 104,
+          "n_total": 120
+        },
+        "background_ssim": {
+          "mean": 0.743169,
+          "n_valid": 104,
+          "n_total": 120
+        }
+      },
+      "x_b": {
+        "iou": {
+          "mean": 0.551276,
+          "n_valid": 104,
+          "n_total": 120
+        },
+        "dice": {
+          "mean": 0.614284,
+          "n_valid": 104,
+          "n_total": 120
+        },
+        "background_ssim": {
+          "mean": 0.74317,
+          "n_valid": 104,
+          "n_total": 120
+        }
+      },
+      "x_c": {
+        "iou": {
+          "mean": 0.551893,
+          "n_valid": 108,
+          "n_total": 120
+        },
+        "dice": {
+          "mean": 0.617934,
+          "n_valid": 108,
+          "n_total": 120
+        },
+        "background_ssim": {
+          "mean": 0.644526,
+          "n_valid": 108,
+          "n_total": 120
+        }
+      },
+      "a_c": {
+        "iou": {
+          "mean": 0.809669,
+          "n_valid": 109,
+          "n_total": 120
+        },
+        "dice": {
+          "mean": 0.850095,
+          "n_valid": 109,
+          "n_total": 120
+        },
+        "background_ssim": {
+          "mean": 0.869656,
+          "n_valid": 109,
+          "n_total": 120
+        }
+      }
+    },
+    "failure_samples": 16,
+    "failed_detections": 34,
+    "review_samples": 95,
+    "classifier": {
+      "b": {
+        "top1_accuracy": 0.875,
+        "mean_target_prob": 0.842132,
+        "n": 120
+      },
+      "c": {
+        "top1_accuracy": 0.875,
+        "mean_target_prob": 0.835115,
+        "n": 120
+      }
+    },
+    "lpips": {
+      "net": "alex",
+      "n_images": 120,
+      "L_ab": 0.0,
+      "L_bc": 0.09984,
+      "L_ac": 0.09984
+    },
+    "fid": {
+      "n_generated": 120,
+      "n_real": 140,
+      "b_vs_real_zebra": 80.7007,
+      "c_vs_real_zebra": 79.6206
+    }
+  },
+  "human_review": {
+    "observed": 10,
+    "reviewed": 7,
+    "needs_discussion": 3,
+    "other_queue_pending": 85,
+    "reviewer_signature": "",
+    "source": "user observations in this conversation; AI transcribed only"
+  }
+}

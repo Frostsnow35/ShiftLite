@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #31</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明 — PR #31</span></h1>
+<p class="en">Bilingual reviewer note per <code>AGENTS.md</code> and <code>docs/AI_POLICY.md</code>. 本文件为 PR #31 的正式编号说明，由维护者侧依据 PR 描述与仓库记录整理。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>31</dd>
+  <dt>作者 / Author</dt><dd>camdies（原始实现与人工观察）；本文件由维护者侧整理</dd>
+  <dt>日期 / Date</dt><dd>2026-11-12 开 PR；2026-11-13 整理</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>Codex：本轮 gpt-6.1-sol，早期实现轮次模型标识未记录；维护者侧整理使用 WorkBuddy</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>针对 #20，补齐结构评测中的 Dice、检测失败独立记录与原有 10 张样本的人工观察归档；把输入保真与输出一致性分开记录，并完善启动脚本、离线复核材料导出、测试与复现指南。<span class="en">English: For issue #20, this PR adds Dice, explicit detection-failure records and human observations for the original ten samples, separates input preservation from output consistency, and improves portable execution, offline review exports, tests and documentation.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>impl/core/structure.py</code>、<code>metrics.py</code>、<code>metrics_deep.py</code></td><td>Dice 与 IoU 并列、严格共同背景 SSIM、逐指标有效样本数、检测失败原因与候选数；分类器改用权重配套预处理</td></tr>
+  <tr><td><code>impl/core/review.py</code>、<code>impl/cli.py</code></td><td>新增 review-materials 离线导出，保护已有人工 CSV，拒绝跨实验与图片来源变更</td></tr>
+  <tr><td><code>impl/web/app.js</code>、<code>index.html</code></td><td>逐图 Canny 读真实字段，页面口径修正，保留旧结果字段回退</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/</code></td><td>人工 CSV、小结、图片 SHA-256 清单、本机指标与结构表</td></tr>
+  <tr><td><code>.github/workflows/ai-pr-reviewer-note.yml</code></td><td>fork 场景写评论失败不再判检查失败；增加编号说明草稿拦截</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：Codex（本轮 gpt-6.1-sol；早期轮次未记录）；维护者侧整理使用 WorkBuddy。</li>
+  <li>参与范围 / Extent：代码实现、自动测试、复核材料生成、文档整理与文稿撰写由 AI 辅助；正式编号说明与格式类修复由维护者侧完成。</li>
+  <li>人工复核 / Human review：原有 10 张的视觉判断由提交者逐张给出，AI 只做展示与转录，不代填结论；7 条 reviewed、3 条 needs_discussion，署名按要求留空。其余 85 张风险候选（含新增 6 张检测失败）未查看。尚无人工代码审查或第二人独立图片复核记录。</li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>提交者记录：11 个 Python unittest、Node 前端字段契约测试、<code>node --check</code>、<code>git diff --check</code> 通过；2026-11-11 在独立运行目录重新转换与量化、校准 300 张、准备 testA 120 / testB 140、完成 A/B/C bench 与 4 张 deep 联调（<code>metrics_source=real</code>、<code>deep.errors=[]</code>），转换误差均值 0.0001、最大 0.0012 灰度级。正式 120/140 全量质量与 120 张层分析来自 2026-11-09，本轮未重跑，4 张联调不作为正式统计结论。<span class="en">English: Eleven Python tests, the UI contract test, JavaScript syntax and diff checks passed. A fresh runtime directory rebuilt model artifacts and completed a four-image deep smoke run; the full evaluation dates from 2026-11-09 and was not repeated.</span></p>
+<p>维护者侧补充：逐图 Canny 加回旧字段回退并更新前端测试；归档质量表标注为本机复现、非项目主表；原图 ZIP 不要求上传，目视复核用已交付的 PR 评论压缩拼图，SHA-256 清单用于完整性核验。<span class="en">English: Maintainer-side fixes add a legacy-field fallback with an updated UI test, label the archive as a reproduction record, and replace the full image bundle with a compact contact sheet in the PR discussion plus a hash manifest for integrity.</span></p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>检测掩码不是真值，最高置信度不保证跨图主体一致；缺失值保留 null，检测失败不等于生成畸形。人工意见只绑定 <code>image-manifest.json</code> 中的图片哈希，独立重跑后不可自动套用。新旧背景算法、分类器预处理版本不可混用；FID/KID 沿用历史特征实现，不用于跨论文标准 FID 排名。7940HX 归档数值与项目主表存在差异，差异来源未在本 PR 说明。性能与部分数值受设备、依赖及负载影响。<span class="en">English: Detector masks are proxies; missing values stay null and detection failure does not establish malformed generation. Human observations are hash-bound. Background protocols and classifier preprocessing versions must not be mixed; legacy FID/KID features are not comparable to standard benchmarks. Differences between the 7940HX archive and the project main table are not explained in this PR.</span></p>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox"> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox"> 测试通过 / Tests pass</li>
+  <li><input type="checkbox"> AI 产出已人工复核 / AI output manually verified（人工代码审查与第二人独立图片复核尚待完成）</li>
+</ul>
+</body>
+</html>

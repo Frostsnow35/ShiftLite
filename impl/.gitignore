@@ -26,6 +26,7 @@ artifacts/uploads/
 artifacts/results/inference/
 artifacts/results/quality/
 artifacts/results/anomalies/*.png
+artifacts/results/structure_review/*.png
 artifacts/results/_*
 artifacts/figures/*.png
 

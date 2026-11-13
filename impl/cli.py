@@ -1,6 +1,6 @@
 """ShiftLite 命令行入口。
 
-    python cli.py setup      # 下载模型 → 转 ONNX → 转 IR → INT8 量化 → 拉样例图
+    python cli.py setup      # 下载模型 → 直转 IR → INT8 量化 → 拉样例图
     python cli.py bench      # A/B/C 三组性能对比（延迟 / FPS / 体积）
     python cli.py quality    # 三组输出的质量与结构保真度量
     python cli.py serve      # 启动本地可视化界面
@@ -562,9 +562,10 @@ def cmd_quality(args):
            f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
 
     rows = []
-    YA, YB, YC = [], [], []      # deep 模式用的批量图像
+    YA, YB, YC, inputs = [], [], [], []
     for p in horses:
         img = load_image(p)
+        inputs.append(np.asarray(img, dtype=np.uint8))
         x = to_tensor(img)
         y = {}
         for g in ["A", "B", "C"]:
@@ -578,7 +579,7 @@ def cmd_quality(args):
             if g in y:
                 {"A": YA, "B": YB, "C": YC}[g].append(y[g].astype(np.uint8))
 
-        row = {"sample": p.stem, "input": str(p.relative_to(ROOT))}
+        row = {"sample": p.stem, "input": p.relative_to(ROOT).as_posix()}
         if "A" in y and "B" in y:
             row["ssim_ab"] = ssim(y["A"], y["B"])
             row["edge_ssim_ab"] = edge_ssim(y["A"], y["B"])
@@ -607,12 +608,13 @@ def cmd_quality(args):
 
     deep_block = {}
     if args.deep:
-        deep_block = _deep_metrics(YA, YB, YC, rows, out_dir, args)
+        deep_block = _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs)
 
     summary = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "protocol_version": "quality-v2",
         "n_samples": len(rows),
-        "metrics_source": "real" if deep_block else "proxy",
+        "metrics_source": ("real" if deep_block.get('complete') else "partial") if deep_block else "proxy",
         "mean": {
             "ssim_ab": avg("ssim_ab"),
             "edge_ssim_ab": avg("edge_ssim_ab"),
@@ -633,7 +635,7 @@ def cmd_quality(args):
        f"（{'真实感知指标' if deep_block else '代理值，仅供联调'}）")
 
 
-def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
+def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
     """接真实感知网络的一组指标。依赖缺失时整段跳过，不留半成品。"""
     try:
         from core.metrics_deep import (canny_edge_ssim, fid, inception_features,
@@ -649,7 +651,9 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
     from core.utils import load_image
 
     have = dict(A=bool(YA), B=bool(YB), C=bool(YC))
-    deep: dict = {"requested": True, "groups": have}
+    deep: dict = {"requested": True, "groups": have, "errors": [],
+                  "fid_implementation": "torchvision ImageNet InceptionV3 legacy; not standard pytorch-fid comparable",
+                  "classifier_preprocessing": "ResNet50_Weights.IMAGENET1K_V1.transforms()"}
 
     # 1) 真实 LPIPS 三对归因
     if all(have.values()):
@@ -669,10 +673,15 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
            f"L_ac={lp['L_ac']}")
 
     # 2) Canny 边缘 SSIM（方案指定，替代 metrics.py 的梯度幅值版本）
-    for key, (x, y) in {"ab": (YA, YB), "bc": (YB, YC), "ac": (YA, YC)}.items():
+    for key, (x, y) in {"ab": (YA, YB), "bc": (YB, YC), "ac": (YA, YC),
+                       "xa": (inputs, YA), "xb": (inputs, YB), "xc": (inputs, YC)}.items():
         if x and y:
             vals = [canny_edge_ssim(a, b) for a, b in zip(x, y)]
             deep[f"canny_edge_ssim_{key}"] = round(float(np.mean(vals)), 6)
+            for row, value in zip(rows, vals):
+                row[f'canny_edge_ssim_{key}'] = value
+    deep['canny_n_valid'] = {key: sum(r.get(f'canny_edge_ssim_{key}') is not None for r in rows)
+                             for key in ('ab', 'bc', 'ac', 'xa', 'xb', 'xc')}
     if deep.get("canny_edge_ssim_bc") is not None:
         _p(f"  Canny 边缘 SSIM(b,c) = {deep['canny_edge_ssim_bc']}")
 
@@ -699,39 +708,48 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
             deep["fid"] = fid_block
             deep["kid"] = kid_block
         except Exception as e:
+            deep['errors'].append({'metric': 'fid/kid', 'error': str(e)})
             _p(f"  [跳过] FID/KID：{type(e).__name__}: {str(e)[:160]}")
     else:
         _p("  [跳过] FID/KID：没有 zebra 参照批（eval/testB 或 samples）")
 
-    # 4) 掩码 IoU + 背景 SSIM（真值掩码来自 Mask R-CNN）
-    if YA and YC:
+    # 输入保真 X→A/B/C 与输出一致性 A→C 分开；掩码不是人工真值。
+    if all(have.values()):
         try:
-            m_a = instance_masks(YA)
-            m_c = instance_masks(YC)
-            ious, bgs = [], []
-            for row, ma, mc in zip(rows, m_a, m_c):
-                if ma["found"] and mc["found"]:
-                    ious.append(mask_iou(ma["mask"], mc["mask"]))
-                    row["mask_iou_ac"] = round(float(ious[-1]), 6)
-                    b = background_ssim(np.asarray(YA[rows.index(row)],
-                                                   dtype=np.float32),
-                                        np.asarray(YC[rows.index(row)],
-                                                   dtype=np.float32),
-                                        ma["mask"])
-                    bgs.append(b)
-                    row["background_ssim_ac"] = round(float(b), 6)
-                else:
-                    row["mask_iou_ac"] = None
-            deep["mask"] = {
-                "detected_pairs": len(ious),
-                "mean_iou_ac": round(float(np.mean(ious)), 6) if ious else None,
-                "mean_background_ssim_ac":
-                    round(float(np.mean(bgs)), 6) if bgs else None,
+            from core.structure import measure_structure, write_review_materials
+            images = {'X': inputs, 'A': YA, 'B': YB, 'C': YC}
+            detections = {}
+            for side, batch in images.items():
+                _p(f"  Mask R-CNN: {side} ({len(batch)} images)")
+                detections[side] = instance_masks(batch, label='horse' if side == 'X' else 'zebra')
+            structure = measure_structure(rows, images, detections)
+            write_review_materials(structure, rows, images, detections, RESULTS / 'structure_review')
+            deep['structure'] = structure
+            # 旧 A/C 背景填充口径保留为 legacy，严格共同背景在 structure.pairs。
+            bgs = []
+            for i, row in enumerate(rows):
+                da, dc = detections['A'][i], detections['C'][i]
+                value = None
+                if da['found'] and dc['found']:
+                    try:
+                        value = background_ssim(YA[i], YC[i], da['mask'])
+                    except ValueError:
+                        pass
+                row['background_ssim_ac'] = value
+                if value is not None:
+                    bgs.append(value)
+            pair = structure['pairs']['a_c']
+            deep['mask'] = {
+                'detected_pairs': pair['iou']['n_valid'],
+                'mean_iou_ac': pair['iou']['mean'], 'mean_dice_ac': pair['dice']['mean'],
+                'mean_background_ssim_ac': round(float(np.mean(bgs)), 6) if bgs else None,
+                'background_n_valid': len(bgs), 'n_total': len(rows),
+                'background_protocol': 'legacy foreground-fill whole-image SSIM',
             }
-            _p(f"  掩码 IoU(a,c) 均值 = {deep['mask']['mean_iou_ac']}"
-               f"（检出 {len(ious)}/{len(rows)} 对）")
+            _p(f"  结构评测完成：{structure['n_failure_samples']} 张检测失败，人工待复核")
         except Exception as e:
-            _p(f"  [跳过] 掩码 IoU：{type(e).__name__}: {str(e)[:160]}")
+            deep['errors'].append({'metric': 'structure', 'error': str(e)})
+            _p(f"  [失败] 结构评测：{type(e).__name__}: {e}")
 
     # 5) 斑马判别准确率（任务保真；方案 §4「量化前后」→ b、c 两批各评一次）
     disc = {}
@@ -750,10 +768,11 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
             _p(f"  斑马判别 top1（{tag} 批）= {acc:.2%}（n={len(preds)}）")
         except Exception as e:
             _p(f"  [跳过] 斑马判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
+            deep['errors'].append({'metric': f'classifier_{tag}', 'error': str(e)})
     if disc:
         deep["zebra_discrimination"] = disc
 
-    # 6) 异常样本登记：不混进上面的均值；0 例也落盘，便于进度页区分"查过没问题/没查"
+    # 异常仍计入全集均值；零异常也写空索引，避免残留旧登记。
     bad = [r for r in rows
            if isinstance(r.get("ssim_bc"), float)
            and r["ssim_bc"] < args.anomaly_threshold]
@@ -781,9 +800,14 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args) -> dict:
             deep["anomalies"] = {"count": 0, "index": None,
                                  "threshold": args.anomaly_threshold}
     else:
+        register_anomalies([], RESULTS / 'anomalies')
         deep["anomalies"] = {"count": 0, "index": None,
                              "threshold": args.anomaly_threshold}
         _p(f"  异常样例 0 张（ssim_bc 均 ≥ {args.anomaly_threshold}）")
+    required = ('lpips', 'fid', 'kid', 'structure', 'mask', 'zebra_discrimination')
+    deep['complete'] = (all(have.values()) and not deep['errors']
+                        and all(k in deep for k in required)
+                        and set(disc) == {'b', 'c'})
     return deep
 
 def cmd_layers(args):
@@ -841,6 +865,16 @@ def cmd_figures(args):
         _p(f"  {p}")
 
 
+# ---------------- review materials ----------------
+
+def cmd_review_materials(args):
+    from core.review import build_review_materials
+    manifest = build_review_materials(args.quality, args.output, args.image_root,
+                                      args.sample_list)
+    _p(f"已整理 {len(manifest['samples'])} 张待复核材料 → {args.output}")
+    _p("人工填写请另存 human_review.csv；命令不会填写或覆盖人工结论。")
+
+
 # ---------------- serve ----------------
 
 def cmd_serve(args):
@@ -894,6 +928,13 @@ def main():
 
     fg = sub.add_parser("figures", help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
     fg.set_defaults(func=cmd_figures)
+
+    rv = sub.add_parser("review-materials", help="从已有 quality-v2 结果整理复核图片、清单和空白 CSV，不重跑模型")
+    rv.add_argument("--quality", type=Path, default=RESULTS / 'quality.json')
+    rv.add_argument("--output", type=Path, required=True, help="独立材料目录；不同实验请用新目录")
+    rv.add_argument("--image-root", type=Path, default=ROOT, help="JSON 中 input 路径的基准目录（impl）")
+    rv.add_argument("--sample-list", type=Path, help="可选 JSON：{samples: [样本ID, ...]}，按给定顺序导出")
+    rv.set_defaults(func=cmd_review_materials)
 
     args = ap.parse_args()
     sys.path.insert(0, str(ROOT))

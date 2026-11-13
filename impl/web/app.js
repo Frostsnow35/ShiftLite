@@ -1023,9 +1023,9 @@ function renderQuality() {
 
   notice.className = 'notice' + (real ? ' is-ok' : '');
   notice.innerHTML = real
-    ? `<b>口径</b>：SSIM / Canny 边缘 SSIM 为纯 numpy 真实计算；LPIPS 为官方 AlexNet 真实感知距离，` +
-      `FID / KID 与掩码、判别同步跑通。<b>样本量 ${esc(q.n_samples)} 张</b>，数值在 quality.json 的 deep 字段，可直接进报告。`
-    : `<b>口径</b>：当前只有结构代理值（1 − SSIM），<b>不可写进报告</b>。跑 <b>python cli.py quality --deep</b> 得真实 LPIPS / FID / KID。`;
+    ? `<b>口径</b>：SSIM 与 OpenCV Canny 边缘 SSIM 已计算；LPIPS 为官方 AlexNet 真实感知距离，` +
+      `FID / KID 与掩码、判别已计算。<b>样本量 ${esc(q.n_samples)} 张</b>；检测器掩码并非真值，指标有效样本数与人工待复核状态见下方。`
+    : `<b>口径</b>：深度指标尚未完整通过；缺失值不参与相应均值。请检查 quality.json 的 deep.errors 并运行 <b>python cli.py quality --deep --limit 120</b>。`;
 
   renderDeepTiles(q, d, real, m);
 
@@ -1045,9 +1045,9 @@ function renderQuality() {
 
   bars($('structChart'), [
     { label: 'SSIM (a,b)', value: m.ssim_ab, color: '#2c56a3' },
-    { label: 'Canny 边缘 (a,b)', value: d.canny_edge_ssim_ab ?? m.edge_ssim_ab, color: '#6b93c9' },
+    { label: 'Canny 边缘 (a,b)', value: d.canny_edge_ssim_ab, color: '#6b93c9' },
     { label: 'SSIM (b,c)', value: m.ssim_bc, color: '#b07717' },
-    { label: 'Canny 边缘 (b,c)', value: d.canny_edge_ssim_bc ?? m.edge_ssim_bc, color: '#d4a548' },
+    { label: 'Canny 边缘 (b,c)', value: d.canny_edge_ssim_bc, color: '#d4a548' },
   ], '结构保真 · 0~1', '越接近 1 越好');
 
   renderQualityTable(q);
@@ -1084,8 +1084,26 @@ function renderDeepTiles(q, d, real, m) {
     put('KID · C 批', fmt(kc.mean, 4), `± ${fmt(kc.std, 4)}`);
   }
   if (d.mask) {
-    put('掩码 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `检出 ${d.mask.detected_pairs} 对 · Mask R-CNN`);
-    put('背景 SSIM (a,c)', fmt(d.mask.mean_background_ssim_ac, 3), '掩码外区域未被改写');
+    put('输出一致性 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples} · 检测器估计`);
+    put('输出一致性 Dice (a,c)', fmt(d.mask.mean_dice_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples}`);
+    put('旧背景 SSIM (a,c)', fmt(d.mask.mean_background_ssim_ac, 3), '旧填充算法，仅作历史对照');
+  }
+  if (d.structure) {
+    for (const key of ['x_a', 'x_b', 'x_c', 'a_c']) {
+      const pair = d.structure.pairs[key];
+      for (const [metric, label] of [['iou', 'IoU'], ['dice', 'Dice'], ['background_ssim', '共同背景 SSIM']]) {
+        const item = pair[metric];
+        put(`${key.startsWith('x') ? '输入保真' : '输出一致性'} ${key} · ${label}`,
+          fmt(item.mean, 3), `有效 ${item.n_valid}/${item.n_total} · v2`);
+      }
+    }
+    put('检测失败样本', `${d.structure.n_failure_samples}`, '检测失败不等于畸形；人工复核待完成');
+    for (const key of ['xa', 'xb', 'xc']) {
+      put(`输入 Canny (${key})`, fmt(d[`canny_edge_ssim_${key}`], 4),
+        `有效 ${d.canny_n_valid?.[key] ?? '—'}/${q.n_samples} · 条纹也会产生边缘`);
+    }
+    box.append(el('a', { href: '/artifacts/results/structure_review/review_queue.json',
+      text: '查看人工待复核清单（对照图在同目录）', target: '_blank', rel: 'noopener' }));
   }
   if (d.zebra_discrimination) {
     const zb = d.zebra_discrimination.b || {};
@@ -1293,7 +1311,7 @@ function renderQualityTable(q) {
   t.innerHTML = '';
   $('qualitySub').textContent = `${q.n_samples} 张 · ${esc(q.generated_at || '')} · 鼠标悬停看该张明细`;
 
-  const cols = ['样例', 'SSIM(a,b)', 'Canny(a,b)', 'SSIM(b,c)', 'Canny(b,c)', 'PSNR(b,c)', '掩码 IoU(a,c)'];
+  const cols = ['样例', 'SSIM(a,b)', 'Canny(a,b)', 'SSIM(b,c)', 'Canny(b,c)', 'PSNR(b,c)', '输出 IoU(a,c)', '输出 Dice(a,c)', '输入 IoU(x,c)', '输入 Dice(x,c)', '共同背景(x,c)'];
   const thead = el('thead', {}, [el('tr', {}, cols.map((c) => el('th', { text: c })))]);
   const threshold = (q.deep && q.deep.anomalies && q.deep.anomalies.threshold) || 0.8;
 
@@ -1302,11 +1320,15 @@ function renderQualityTable(q) {
     const tr = el('tr', {}, [
       el('td', { text: r.sample + (r.ssim_bc != null && r.ssim_bc < threshold ? ' ·异常' : '') }),
       el('td', { text: r.ssim_ab != null ? fmt(r.ssim_ab, 4) : '—' }),
-      el('td', { text: r.edge_ssim_ab != null ? fmt(r.edge_ssim_ab, 4) : '—' }),
+      el('td', { text: fmt(r.canny_edge_ssim_ab ?? r.edge_ssim_ab, 4) }),
       el('td', { text: r.ssim_bc != null ? fmt(r.ssim_bc, 4) : '—' }),
-      el('td', { text: r.edge_ssim_bc != null ? fmt(r.edge_ssim_bc, 4) : '—' }),
+      el('td', { text: fmt(r.canny_edge_ssim_bc ?? r.edge_ssim_bc, 4) }),
       el('td', { text: r.psnr_bc != null ? fmt(r.psnr_bc, 2) : '—' }),
       el('td', { text: r.mask_iou_ac != null ? fmt(r.mask_iou_ac, 3) : '—' }),
+      el('td', { text: fmt(r.mask_dice_ac, 3) }),
+      el('td', { text: fmt(r.structure?.pairs?.x_c?.iou, 3) }),
+      el('td', { text: fmt(r.structure?.pairs?.x_c?.dice, 3) }),
+      el('td', { text: fmt(r.structure?.pairs?.x_c?.background_ssim, 3) }),
     ]);
     if (lpips) {
       tr.setAttribute('data-tip', tipHtml(r.sample, [
@@ -1349,7 +1371,7 @@ function renderHonesty() {
   const L = STATE.layers;
   const rows = [
     ['✅', '真实实测', 'A/B/C 三组推理、延迟与 FPS、模型体积、SSIM / Canny 边缘 SSIM / PSNR —— 全部本机真实计算。'],
-    deep.lpips
+    deep.lpips && STATE.quality?.metrics_source === 'real'
       ? ['✅', '真实感知指标', 'LPIPS（AlexNet）三对归因、FID / KID、Mask R-CNN 掩码 IoU、ResNet-50 斑马判别 —— quality --deep 已跑通，数值在 quality.json 的 deep 字段。']
       : ['⚠️', '感知指标待跑', 'LPIPS / FID / KID / 掩码 / 判别的代码已接入（python cli.py quality --deep），当前 quality.json 仍是结构代理值，不可写进报告。'],
     L && L.rows

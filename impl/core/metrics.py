@@ -52,8 +52,8 @@ def _conv_sep(img: np.ndarray, kernel: np.ndarray) -> np.ndarray:
 
 # ---------- SSIM ----------
 
-def ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
-    """标准 SSIM（高斯窗 11×11，σ=1.5）。"""
+def ssim_map(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> np.ndarray:
+    """局部 SSIM 图（高斯窗 11×11，σ=1.5，reflect 边界）。"""
     x = to_gray(a) if a.ndim == 3 else np.asarray(a, dtype=np.float64)
     y = to_gray(b) if b.ndim == 3 else np.asarray(b, dtype=np.float64)
     if x.shape != y.shape:
@@ -73,7 +73,31 @@ def ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
 
     num = (2 * mu_xy + C1) * (2 * sig_xy + C2)
     den = (mu_x2 + mu_y2 + C1) * (sig_x2 + sig_y2 + C2)
-    return round(float(np.clip((num / den).mean(), -1.0, 1.0)), 6)
+    return num / den
+
+
+def ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
+    return round(float(np.clip(ssim_map(a, b, data_range).mean(), -1.0, 1.0)), 6)
+
+
+def background_ssim_valid(a: np.ndarray, b: np.ndarray,
+                          mask_a: np.ndarray, mask_b: np.ndarray) -> tuple[float | None, int]:
+    """只平均完全落在共同背景的 11×11 窗口；不足 64 个窗口返回缺失。
+
+    排除两侧前景的并集，不填充前景，不让移动后的动物进入背景统计。
+    使用与 ssim_map 相同的 reflect 边界。窗口数不是独立样本数。
+    """
+    foreground = np.asarray(mask_a, bool) | np.asarray(mask_b, bool)
+    if foreground.shape != a.shape[:2] or foreground.shape != b.shape[:2]:
+        raise ValueError('图像与掩码尺寸不一致')
+    windows = np.lib.stride_tricks.sliding_window_view(
+        np.pad(foreground, 5, mode='reflect'), (11, 11))
+    valid = ~windows.any(axis=(-2, -1))
+    n = int(valid.sum())
+    if n < 64:
+        return None, n
+    value = float(np.clip(ssim_map(a, b)[valid].mean(), -1, 1))
+    return round(value, 6), n
 
 
 def background_ssim(a: np.ndarray, b: np.ndarray,

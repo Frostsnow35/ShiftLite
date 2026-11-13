@@ -21,6 +21,36 @@
 
 ## 二、跑起来
 
+### T0/T1 运行与复核交付（2026-11-11）
+
+首次安装、独立副本、缓存路径、完整评测与复核材料导出见
+[通用复现指南](../docs/REPRODUCING_T0_T1.md)。Windows 可从仓库根运行
+`& .\impl\run-local.ps1 -CliArgs @('serve')`；需先安装依赖并完成 setup。
+脚本优先使用仓库 `.venv\Scripts\python.exe`，否则使用 PATH 中的 python；
+默认运行副本位于仓库同级 `<仓库名>-runs/local`，不复制历史 artifacts。
+可用 `-Python`、`-RunRoot`、`-TorchHome` 分别指定解释器、运行目录和权重缓存。
+缓存默认尊重已有 TORCH_HOME，否则放在运行目录的 cache/torch；脚本退出后恢复环境变量。
+模型、数据与本机新结果都留在运行副本。运行期间不要同时修改或同步副本代码。
+
+已有 quality-v2 结果可用 `python cli.py review-materials --output <新材料目录>`
+导出机器清单、原图/掩码对照和空白 CSV，无需重新推理。
+同一目录拒绝混入不同质量 JSON、样本集合或变化后的图片；不改写人工 CSV 或已有模板。
+原有 10 张的人工记录入口见
+[实验与人工复核归档](../docs/experiments/2026-11-09-7940HX/README.md)。
+
+T1 的 `quality-v2` 在 `deep.structure` 中分别记录输入 `x→a/b/c` 与输出 `a→c`
+的 IoU、Dice、共同背景 SSIM，逐指标保存有效/总样本数。共同背景只使用两侧前景
+并集外完整的 11×11 窗口，至少 64 个；旧 `background_ssim_ac` 保留为历史填充算法。
+每侧取置信度最高目标，输入为 horse、输出为 zebra，检测阈值与掩码阈值均为 0.5。
+多实例对应关系未经自动证明，和检测失败一起进入 `results/structure_review/` 的人工待复核清单。
+缺失值为 null，不填零、不自动判为生成畸形，也不代签真人复核。
+
+ResNet50 使用权重配套预处理；逐图 Canny 与梯度字段分开。新判别率不得与旧算法混作同一批。
+FID 保持原 torchvision 特征实现，不能直接与外部标准 FID 排名比较。
+测试入口：在 `impl` 下运行 `python -m unittest discover -s tests -v`。
+
+以下为原始通用安装步骤和历史结果，平台及日期仍按原记录保留。
+
 ```bash
 # 1. 装依赖（CPU 版 torch，约 250MB）
 pip install -r requirements.txt
@@ -206,7 +236,7 @@ B 相对 A = 1.17× / 1.40× / 1.39×，**在噪声内跨过 1.0，本机不能�
 
 - **LPIPS(a,b)** —— 转换本身引入的差异，应≈0；偏大说明转换有 bug，不是量化的锅。
 - **LPIPS(b,c)** —— 量化本身引入的差异，核心指标。
-- **LPIPS(a,c)** —— 原版到终版的总差异，理论约等于前两项之和。
+- **LPIPS(a,c)** —— 原版到终版的总差异，须独立计算，不能假定等于前两项之和。
 - **FID / KID** —— 与真实目标域的**特征分布距离**，**不等于"逼真度"**。
 - **掩码 IoU** —— 按类名读取类别索引；只能用 COCO 版 Mask R-CNN（VOC 21 类没有 zebra）。
 - **FP16** —— i5-1340P 无 AVX512-FP16，CPU 上不加速、只省体积；仅作核显对照。
