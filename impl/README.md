@@ -76,6 +76,19 @@ python cli.py serve
 #    → http://127.0.0.1:8770
 ```
 
+**换迁移对**：所有子命令都接受 `--pair <id>`，默认是 `horse2zebra`。
+
+```bash
+python cli.py setup   --pair zebra2horse     # 斑马 → 马（反向，复用同一份数据集）
+python cli.py bench   --pair zebra2horse
+python cli.py quality --pair zebra2horse
+python cli.py layers  --pair zebra2horse
+python cli.py serve                          # 界面里用顶部「迁移对」下拉框切换
+```
+
+可用迁移对：`horse2zebra`（默认）、`zebra2horse`、`summer2winter`、`style_monet`，
+见 `pairs/` 目录与本文第九节。
+
 首次 `setup` 需要下载 45 MB 权重，网络慢时会自动续传。
 Windows 上可先 `set TORCH_HOME=E:\cache\torch`，避免 `--deep` 的权重缓存落到 C 盘。
 
@@ -85,10 +98,12 @@ Windows 上可先 `set TORCH_HOME=E:\cache\torch`，避免 `--deep` 的权重缓
 
 ```
 ShiftLite-impl/
-├── cli.py                 命令行入口（setup / bench / quality / serve）
+├── cli.py                 命令行入口（setup / bench / quality / layers / figures / serve）
 ├── server.py              本地可视化服务（仅标准库）
+├── pairs/                 迁移对清单（每个 pair 一份 JSON：权重源 / 数据集 / 域映射 / 指标开关）
 ├── core/
 │   ├── model.py           CycleGAN ResNet 生成器（与官方结构等价）
+│   ├── pairs.py           迁移对加载与路径解析（默认 pair 平铺，其余落 artifacts/<id>/）
 │   ├── convert.py         PyTorch 直转 OpenVINO IR + 转换正确性验证
 │   ├── quantize.py        NNCF 训练后量化（PTQ）
 │   ├── backends.py        A / B / C 三组推理后端
@@ -98,11 +113,17 @@ ShiftLite-impl/
 │   └── utils.py           图像读写、预处理、计时
 ├── web/                   可视化界面（纯原生，无外部依赖）
 └── artifacts/
-    ├── models/            权重、FP32 IR、INT8 IR
+    ├── models/            权重、FP32 IR、INT8 IR（默认 pair）
     ├── calib/             量化校准集（trainA，与评测集隔离）+ manifest.json
-    ├── samples/           演示与评测样例图（testA / testB）
-    └── results/           benchmark.json / quality.json / layers.json
+    ├── samples/           演示用样例图（输入域 / 参照域各几张）
+    ├── eval/input|ref/    正式评测集（按角色分，不按 zip 的 testA/testB 分）
+    ├── results/           benchmark.json / quality.json / layers.json（默认 pair）
+    └── <pair-id>/         其余迁移对的同上结构，互不覆盖
 ```
+
+> 评测集目录按**角色**命名（`input` = 生成批、`ref` = FID/KID 参照批）而不是沿用 zip 的
+> `testA`/`testB`。原因很实际：`zebra2horse` 的输入域在 zip 的 `testB` 里，若目录仍叫
+> `testA`，就会出现「testA 里装着斑马」这种自相矛盾，看目录名就会把方向搞反。
 
 ---
 
@@ -291,3 +312,90 @@ FID/KID 参照批自动取 `eval/testB` 全量 140 张真实斑马图。
 | §3 网络层间分工 | `core/layers.py` + `cli.py layers` → `layers.json` |
 | §6 实验 E0–E5 | 界面「实验进度」页 |
 | §9 风险对策 | 量化失败时 `--accuracy-control` 走精度控制量化 |
+
+---
+
+## 九、多迁移对（issue #24）
+
+「换权重即换应用」这件事从代码挪到了数据：一个迁移对 = 一份 `pairs/<id>.json`，
+描述**权重源、数据集、域映射、指标开关**，`core/pairs.py` 负责加载与路径解析。
+
+### 9.1 四个迁移对
+
+| id | 类型 | 方向（输入 → 输出） | 数据集 | 数据大小 |
+|---|---|---|---|---|
+| `horse2zebra` | 实例纹理型 | 马 → 斑马（zip `testA` → `testB`） | horse2zebra.zip | 111 MB |
+| `zebra2horse` | 同域反向 | 斑马 → 马（zip `testB` → `testA`） | horse2zebra.zip | **0（复用）** |
+| `summer2winter` | 全局域型 | 夏季 → 冬季（`testA` → `testB`） | summer2winter_yosemite.zip | 126 MB |
+| `style_monet` | 风格型 | 照片 → 莫奈（`testB` → `testA`） | monet2photo.zip | 291 MB |
+
+四个权重文件都是 **45,575,747 字节**（同一 ResnetGenerator 架构，逐 HEAD 请求核实），
+所以转换 / 量化链路完全复用，不需要改代码。
+
+### 9.2 方向陷阱：数据集名和权重方向不是一回事
+
+这是实现时最容易错、而且错了看不出来的地方：
+
+- `style_monet.pth` 对应的数据集叫 `monet2photo.zip`，**没有 `style_monet.zip`**；
+  该数据集 A 域是莫奈画、B 域是照片，而 `style_monet` 是 **B→A（照片→画）**。
+- `zebra2horse` 同理是反向。
+
+如果按数据集名想当然取 `testA` 当输入，就会把油画当输入、把照片当参照，
+结论全错且无从察觉。所以：
+
+- manifest 里显式写 `input_dir / ref_dir / calib_dir`，**不从数据集名推断**；
+- 校准集取各自 `trainX`，与 `testX` 评测集隔离，避免数据泄漏；
+- 评测集目录按角色命名（`eval/input`、`eval/ref`），不沿用 zip 的 `testA/testB`；
+- `zebra2horse` 的 `setup` 日志会打印
+  `评测集 输入批 140 张（testB）/ 参照批 120 张（testA）`，方向可当场核对。
+
+### 9.3 路径策略
+
+默认 pair（`horse2zebra`）保持既有平铺路径，已入库的
+`artifacts/results/{benchmark,quality,layers}.json` 零改动；其余 pair 落
+`artifacts/<pair-id>/`，互不覆盖。这样切换 pair 不会污染别的 pair 的证据。
+
+> 顺带一个真实教训：`bench` 会**直接覆盖**已入库的 `benchmark.json`。
+> 我在跑第一次回归时就把 i5-1340P 的那份覆盖了，用 `git checkout` 还原的。
+> 这也是路径隔离必须做的实证理由。
+
+### 9.4 `zebra2horse` 实测（本机 AMD Ryzen 7 7745HX）
+
+| 组 | 延迟均值 | 标准差 | FPS | 体积 | 相对 A |
+|---|---|---|---|---|---|
+| A · PyTorch FP32 | 320.7 ms | 25.4 | 3.1 | 43.46 MB | 1.00× |
+| B · OpenVINO FP32 | 188.3 ms | 7.2 | 5.3 | 43.52 MB | 1.70× |
+| C · OpenVINO INT8 | 54.6 ms | 7.5 | 18.3 | 11.10 MB | 5.87× |
+
+质量（proxy 指标，6 张）：`ssim_ab ≈ 1.0000`、`psnr_ab ≈ 82–90 dB`（转换无损）；
+`ssim_bc 0.855–0.936`、`psnr_bc 28.1–30.6 dB`（量化有可测退化）。
+
+**方向人工核对**：输入是斑马，A/B/C 三组输出的黑白条纹均消失、体色变为棕褐，
+形态更接近马 —— 方向正确，无反向生成。
+
+> 注意：绝对值不能与默认 pair 的 i5-1340P 数据同表比较（不同机器）；
+> 与同机 horse2zebra（A 254.3 / B 129.6 / C 35.9 ms）相比，本对整体慢约 25%，
+> 属同一台机器上的负载波动，不宜解读为模型差异。
+
+### 9.5 E4 跨类型层间对比（同机、同一套探针层）
+
+| 迁移对 | 层数 | 平均余弦 | 漂移最大层 | 该层余弦 | 残差块首→尾余弦 |
+|---|---|---|---|---|---|
+| `horse2zebra`（n=120） | 15 | 0.9906 | `resblock_09` | 0.9644 | 0.9994 → 0.96 |
+| `zebra2horse`（n=6） | 15 | 0.9899 | `resblock_09` | 0.9662 | 0.9995 → 0.9662 |
+
+两对的漂移**形态几乎一致**：`down_*` 几乎不动（≈0.9997），漂移集中在
+`resblock_06`–`resblock_09` 并随深度单调累积，最大漂移都落在 `resblock_09`。
+
+这说明**漂移是架构与量化本身的属性，与迁移方向无关**——换方向不改变"哪一层最敏感"。
+（`zebra2horse` 目前是 6 张，正式口径需 `--limit 120` 重跑后再与 n=120 的结论并列。）
+
+### 9.6 已知限制
+
+- `summer2winter` / `style_monet` 的清单已就位，但数据集（126 MB / 291 MB）
+  在本机跨境链路下下载极慢（实测约 40–70 KB/s），**尚未跑通到 benchmark 阶段**；
+  界面里它们的下拉项会显示「未就绪」。
+- 新迁移对的 `quality` 目前只有 **proxy** 指标（`metrics_source: "proxy"`），
+  本机 venv 缺 `torchvision`，跑不了 `--deep`；接入真实感知指标前不得进入正式对比表。
+- `metrics_deep` 里 FID/KID 的键名仍是 `*_vs_real_zebra` 这种 horse2zebra 专用写法，
+  给 `zebra2horse`（参照域是马）开 `--deep` 前需要改成按 `ref_prefix` 命名。
