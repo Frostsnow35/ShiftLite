@@ -5,7 +5,7 @@
 - [人工表](human_review.csv)：原有 10 张实际意见，署名按要求为空。
 - [人工小结与待讨论事项](human_review_summary.md)：7 条 reviewed、3 条 needs_discussion；其余 85 张未查看。
 - [固定样本顺序](legacy_samples.json)、[对应检测记录](legacy_detections.json)。
-- [原图片哈希清单](image-manifest.json)：10 张对照图与质量 JSON 的 SHA-256，用于原图完整性核验；目视复核用 PR 评论中的压缩拼图。
+- [原图片哈希清单](image-manifest.json)：10 张对照图与质量 JSON 的 SHA-256，用于原图完整性核验；目视复核用 [PR #31 评论中的压缩拼图](https://github.com/Frostsnow35/ShiftLite/pull/31#issuecomment-6845125203)。
 - [实验来源与指标](metrics-summary.json)：数据规模、模型哈希、评测时源码哈希及口径。
 - [本机质量表（非项目主表）](quality_table.md)、[结构 v2 表](structure_table_v2.md)：2026-11-09 原质量 JSON 生成；2026-11-11 补充 Dice 展示，未重算质量值。
 - 源码哈希核对：与最终 PR 代码比对，仅 `impl/cli.py`、`impl/core/figures.py` 不同（追加 review-materials 子命令与 Dice 展示行，不涉及数值计算），其余 17 个文件在换行符归一后一致。
@@ -13,7 +13,9 @@
 
 ## 复核拼图：一张压缩图，不占仓库空间
 
-10 张对照图的完整 ZIP 不进仓库、也不需要上传。目视复核改由**一张拼图**承担：把 10 张按 [固定顺序](legacy_samples.json) 缩到每格宽 512 px、拼成 2 列 × 5 行、每格标注样本 ID，JPEG 质量 70，整张控制在 500 KB 内，直接拖进 PR 评论框。图片由 GitHub 托管，不进 Git、不占仓库体积。
+10 张对照图的完整 ZIP 不进仓库、也不需要上传。目视复核由**一张拼图**承担，已于 2026-11-13 贴在 [PR #31 评论](https://github.com/Frostsnow35/ShiftLite/pull/31#issuecomment-6845125203)：1024×1550、302 KB JPEG，10 格 2 列 × 5 行，样本 ID 与 [固定顺序](legacy_samples.json) 一致，每格含 X/A/B/C 四侧原图与掩码叠加，无空白或错序。图片由 GitHub 托管，不进 Git、不占仓库体积。
+
+生成规格（供后续重做）：每格宽 512 px、标注样本 ID，JPEG 质量 70，整张控制在 500 KB 内，直接拖进 PR 评论框。
 
 生成示例（在装有 Pillow 的环境，输入目录为 ZIP 解压后的 `images/`）：
 

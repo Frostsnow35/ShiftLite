@@ -97,7 +97,7 @@ $legacyMaterials = Join-Path $run 'review-original-10'
 
 [归档入口](experiments/2026-11-09-7940HX/README.md) 保存 2026-11-09 本机结果来源和 2026-11-10 的人工意见。原有 10 张均有第一轮记录，7 条 reviewed、3 条 needs_discussion；署名按用户要求为空。原意见只绑定 image-manifest.json 中的原始图片哈希。独立重跑后即使样本 ID 相同，也不能自动套用这些结论。
 
-只想复核原意见时，看 PR 评论中的压缩拼图即可目视判断，无需装模型；拼图是有损缩略图，不能用于哈希核验。需要逐张原图时按上文重跑评测并用 review-materials 本地重建，与 image-manifest.json 的 SHA-256 比对，一致才复用意见，不一致则人工表保持 pending。原图 ZIP 不要求上传。新结果可以另行比较，勿修改旧质量 JSON、删除失败样本或手改均值。
+只想复核原意见时，看 [PR #31 评论中的压缩拼图](https://github.com/Frostsnow35/ShiftLite/pull/31#issuecomment-6845125203)即可目视判断，无需装模型；拼图是有损缩略图，不能用于哈希核验。需要逐张原图时按上文重跑评测并用 review-materials 本地重建，与 image-manifest.json 的 SHA-256 比对，一致才复用意见，不一致则人工表保持 pending。原图 ZIP 不要求上传。新结果可以另行比较，勿修改旧质量 JSON、删除失败样本或手改均值。
 
 ## 7 文件与版本管理
 
