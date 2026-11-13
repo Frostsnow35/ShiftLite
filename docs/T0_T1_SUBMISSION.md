@@ -23,7 +23,7 @@
 | 新增 | [docs/experiments/2026-11-09-7940HX/README.md](../docs/experiments/2026-11-09-7940HX/README.md) | 检测失败/异常人工结论归档入口与附件说明 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/human_review.csv](../docs/experiments/2026-11-09-7940HX/human_review.csv) | 原有 10 张实际人工意见，签名留空，7 reviewed/3 needs_discussion |
 | 新增 | [docs/experiments/2026-11-09-7940HX/human_review_summary.md](../docs/experiments/2026-11-09-7940HX/human_review_summary.md) | 逐张汇总、共同发现、待讨论与范围限制 |
-| 新增 | [docs/experiments/2026-11-09-7940HX/image-manifest.json](../docs/experiments/2026-11-09-7940HX/image-manifest.json) | 10 张对照图与质量 JSON 的 SHA-256，供本地重建后核验 |
+| 新增 | [docs/experiments/2026-11-09-7940HX/image-manifest.json](../docs/experiments/2026-11-09-7940HX/image-manifest.json) | 10 张对照图与质量 JSON 的 SHA-256，用于原图完整性核验 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/legacy_detections.json](../docs/experiments/2026-11-09-7940HX/legacy_detections.json) | 原有 10 张的检测侧、类别、置信度及缺失信息 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/legacy_samples.json](../docs/experiments/2026-11-09-7940HX/legacy_samples.json) | 原有 10 张固定导出顺序 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/metrics-summary.json](../docs/experiments/2026-11-09-7940HX/metrics-summary.json) | 本机环境、模型/源码/质量哈希与原始指标摘要 |
@@ -42,7 +42,8 @@
 
 | 材料 | 交付方式 | 当前状态 |
 |---|---|---|
-| ShiftLite_原有10张人工复核材料_2026-11-11.zip | 提交者本机留档，不随仓库交付、不要求上传 | 已生成并检查图片哈希和 ZIP CRC；复核改用 SHA-256 清单与本地重建 |
+| 10 张对照图压缩拼图（JPEG，< 200 KB） | 由提交者直接拖进本 PR 评论框，GitHub 托管，不进仓库 | 待提交者生成并贴出；规格见 [归档说明](experiments/2026-11-09-7940HX/README.md) |
+| ShiftLite_原有10张人工复核材料_2026-11-11.zip | 提交者本机留档，不要求上传 | 已生成并检查图片哈希和 ZIP CRC |
 | 附件SHA256.txt | 与 ZIP 一起本地留档 | 已生成 |
 | 本轮 clean-run-status.json、测试日志和最终核验 JSON | 按需附于评审材料 | 本地保存，不是运行依赖 |
 
@@ -58,7 +59,7 @@
 ## 复核与后续
 
 1. 人工审查代码和 [验证范围](T0_T1_VALIDATION.md)，确认实际认领范围。
-2. 原图不随仓库交付，也不要求上传 ZIP；复核按 [归档说明](experiments/2026-11-09-7940HX/README.md) 用 SHA-256 清单与本地重建完成。
+2. 生成一张 10 图压缩拼图并贴到本 PR 评论，供目视复核；原图 ZIP 不用上传，规格见 [归档说明](experiments/2026-11-09-7940HX/README.md)。
 3. 如实说明 10 张第一轮已看、3 张有待议项、署名为空、其余 85 张未看；是否处理新增 6 张失败由小组确定。
 4. 正式编号说明为 [reviews/PR-31.html](../reviews/PR-31.html)，按 AGENTS.md 随 PR 提交。
 5. 不把 #20 自动写为已关闭；讨论项和人工代码审查尚未完成。

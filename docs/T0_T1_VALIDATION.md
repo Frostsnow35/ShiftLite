@@ -29,7 +29,7 @@
 
 使用现有已验证的 Python 3.12.4 CPU 环境，torch 2.14.1+cpu / torchvision 0.29.1+cpu / OpenVINO 2026.4.1 / NNCF 3.4.0；机器 Ryzen 9 7940HX、Windows 11。没有从零重装 Python 环境，没有验证伙伴机器或 Linux/macOS，也没有重复 Nov9 全量质量与 E4。
 
-原有 10 张第一轮人工观察已记录，7 条 reviewed、3 条 needs_discussion，署名按要求为空；其余 85 张未查看。尚无人工代码审查记录。复核与统计局限见 [人工归档](experiments/2026-11-09-7940HX/README.md)。原图不随仓库交付，也不要求上传；复核按 [归档说明](experiments/2026-11-09-7940HX/README.md) 用图片 SHA-256 与本地重建完成。
+原有 10 张第一轮人工观察已记录，7 条 reviewed、3 条 needs_discussion，署名按要求为空；其余 85 张未查看。尚无人工代码审查记录。复核与统计局限见 [人工归档](experiments/2026-11-09-7940HX/README.md)。原图 ZIP 不要求上传；目视复核用 PR 评论中的压缩拼图，图片 SHA-256 与本地重建用于完整性核验，见 [归档说明](experiments/2026-11-09-7940HX/README.md)。
 
 ## 提交前仍需人工决定
 
