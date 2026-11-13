@@ -865,6 +865,20 @@ def cmd_figures(args):
         _p(f"  {p}")
 
 
+def cmd_stylize(args):
+    """把参数原样转给 stylize/run.py。
+
+    支线自带一套子命令（poc / convert / quantize / bench / download），
+    这里只做入口转发，避免把 AdaIN 的实现细节塞进主线 cli.py。
+    """
+    import runpy
+    target = ROOT / "stylize" / "run.py"
+    if not target.exists():
+        raise SystemExit(f"找不到 AdaIN 支线入口：{target}")
+    sys.argv = [str(target)] + list(args.stylize_args)
+    runpy.run_path(str(target), run_name="__main__")
+
+
 # ---------------- review materials ----------------
 
 def cmd_review_materials(args):
@@ -928,6 +942,16 @@ def main():
 
     fg = sub.add_parser("figures", help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
     fg.set_defaults(func=cmd_figures)
+
+    # AdaIN 支线（issue #32）：独立命令空间，明细见 stylize/README.md。
+    # 与 A/B/C 主线口径隔离：产物落 artifacts/adain/，不写 artifacts/results/。
+    st = sub.add_parser(
+        "stylize",
+        help="AdaIN 支线：任意参考图风格化（独立的 poc/convert/quantize/bench）")
+    st.add_argument("stylize_args", nargs=argparse.REMAINDER,
+                    help="透传给 stylize/run.py 的参数，例如 "
+                         "`poc --content a.jpg --style b.jpg --alpha 0.8`")
+    st.set_defaults(func=cmd_stylize)
 
     rv = sub.add_parser("review-materials", help="从已有 quality-v2 结果整理复核图片、清单和空白 CSV，不重跑模型")
     rv.add_argument("--quality", type=Path, default=RESULTS / 'quality.json')
