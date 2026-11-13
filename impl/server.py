@@ -289,14 +289,17 @@ def stylize_state() -> dict:
                     "url": f"/stylize/samples/{p.name}",
                 })
     contents = []
-    if SAMPLES.exists():
+    # 内容图取默认迁移对的 samples 目录（#24 之后路径是 pair 派生的，没有全局 SAMPLES 了）。
+    # URL 用相对 ROOT 的真实路径，非默认 pair 也能正确指向。
+    samples_dir = get_pair(None).paths.samples
+    if samples_dir.exists():
         exts = {".jpg", ".jpeg", ".png", ".webp"}
-        for p in sorted(SAMPLES.iterdir()):
+        for p in sorted(samples_dir.iterdir()):
             if p.suffix.lower() in exts and not p.name.startswith("_"):
                 contents.append({
                     "id": p.stem,
                     "source": "samples",
-                    "url": f"/artifacts/samples/{p.name}",
+                    "url": f"/{p.relative_to(ROOT).as_posix()}",
                 })
 
     backends = [{"id": "torch", "name": "PyTorch FP32"}]
@@ -573,7 +576,7 @@ class Handler(BaseHTTPRequestHandler):
         if csrc not in ("samples", "uploads"):
             return self._err(400, "content.source 只能是 samples / uploads")
 
-        cbase = UPLOADS if csrc == "uploads" else SAMPLES
+        cbase = UPLOADS if csrc == "uploads" else get_pair(None).paths.samples
         cpath = _find_img(cbase, cid)
         if cpath is None:
             return self._err(404, "找不到内容图")

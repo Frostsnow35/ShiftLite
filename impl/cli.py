@@ -1133,7 +1133,10 @@ def main():
 
     args = ap.parse_args()
     sys.path.insert(0, str(ROOT))
-    select_pair(args.pair)          # 先按 --pair 重绑路径，再执行子命令
+    # 迁移对绑定：只有声明了 --pair 的子命令才需要重绑路径。
+    # stylize（AdaIN 支线）走的是另一套入口，没有 --pair，直接 getattr 会崩。
+    if hasattr(args, "pair"):
+        select_pair(args.pair)      # 先按 --pair 重绑路径，再执行子命令
     args.func(args)
 
 
