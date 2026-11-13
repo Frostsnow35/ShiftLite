@@ -1023,8 +1023,8 @@ def cmd_layers(args):
 
 def cmd_figures(args):
     from core.figures import make_all
-    produced = make_all()
-    _p("实验图表已生成（issue #14）：")
+    produced = make_all(pair=PAIR)
+    _p(f"实验图表已生成（{PAIR.id}，issue #14）：")
     for p in produced:
         _p(f"  {p}")
 
