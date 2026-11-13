@@ -1,0 +1,28 @@
+{
+  "id": "summer2winter",
+  "label": "夏季 → 冬季（全局域型）",
+  "type": "domain",
+  "checkpoint": {
+    "file": "summer2winter_yosemite.pth",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/summer2winter_yosemite.pth",
+    "bytes": 45575747
+  },
+  "dataset": {
+    "zip": "summer2winter_yosemite.zip",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/summer2winter_yosemite.zip",
+    "size_mb": 126,
+    "input_prefix": "summer",
+    "ref_prefix": "winter",
+    "input_dir": "testA",
+    "ref_dir": "testB",
+    "calib_dir": "trainA"
+  },
+  "metrics": {
+    "lpips": true,
+    "fid_kid": true,
+    "edge_ssim": true,
+    "background_ssim": { "enabled": false, "reason": "风景图无稳定前景掩码，背景区无定义" },
+    "mask_iou": { "enabled": false, "reason": "Mask R-CNN 无 summer/winter 类别，掩码不可得" },
+    "class_discrimination": { "enabled": false, "reason": "ImageNet 无 winter 类，判别无意义" }
+  }
+}

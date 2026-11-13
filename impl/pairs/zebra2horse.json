@@ -1,0 +1,28 @@
+{
+  "id": "zebra2horse",
+  "label": "斑马 → 马（同域反向）",
+  "type": "reverse",
+  "checkpoint": {
+    "file": "zebra2horse.pth",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/zebra2horse.pth",
+    "bytes": 45575747
+  },
+  "dataset": {
+    "zip": "horse2zebra.zip",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/horse2zebra.zip",
+    "size_mb": 111,
+    "input_prefix": "zebra",
+    "ref_prefix": "horse",
+    "input_dir": "testB",
+    "ref_dir": "testA",
+    "calib_dir": "trainB"
+  },
+  "metrics": {
+    "lpips": true,
+    "fid_kid": true,
+    "edge_ssim": true,
+    "background_ssim": true,
+    "mask_iou": { "enabled": true, "class": "zebra" },
+    "class_discrimination": { "enabled": true, "imagenet_class": "horse" }
+  }
+}
