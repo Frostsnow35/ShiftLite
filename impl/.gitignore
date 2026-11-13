@@ -55,3 +55,5 @@ Thumbs.db
 *.tmp
 *.bak
 *.log
+# 分段下载的中间分片（xxx.part0 / xxx.part1 …）
+*.part*
