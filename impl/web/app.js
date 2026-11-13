@@ -1144,6 +1144,14 @@ function renderQuality() {
   renderQualityTable(q);
 }
 
+/* FID/KID 的字段名带参照域（如 b_vs_real_zebra / b_vs_real_horse），
+   这里按前缀取值，不写死某个域。 */
+function deepPick(block, tag) {
+  if (!block) return null;
+  const k = Object.keys(block).find((x) => x.startsWith(tag + '_vs_real_'));
+  return k ? block[k] : null;
+}
+
 function renderDeepTiles(q, d, real, m) {
   const box = $('deepTiles');
   box.innerHTML = '';
@@ -1172,12 +1180,15 @@ function renderDeepTiles(q, d, real, m) {
   }
 
   if (d.fid) {
-    put('FID · B 批', fmt(d.fid.b_vs_real_zebra, 2), `生成 ${d.fid.n_generated} vs 真实 ${d.fid.n_real}`);
-    put('FID · C 批', fmt(d.fid.c_vs_real_zebra, 2), '越小分布越接近目标域');
+    const ref = d.fid.ref_domain || refName;
+    const fb = deepPick(d.fid, 'b');
+    const fc = deepPick(d.fid, 'c');
+    put('FID · B 批', fmt(fb, 2), `生成 ${d.fid.n_generated} vs 真实 ${d.fid.n_real}（${ref}）`);
+    put('FID · C 批', fmt(fc, 2), '越小分布越接近目标域');
   }
   if (d.kid) {
-    const kb = d.kid.b_vs_real_zebra || {};
-    const kc = d.kid.c_vs_real_zebra || {};
+    const kb = deepPick(d.kid, 'b') || {};
+    const kc = deepPick(d.kid, 'c') || {};
     put('KID · B 批', fmt(kb.mean, 4), `± ${fmt(kb.std, 4)} · subset ${kb.subset_size}×${kb.n_subsets}`);
     put('KID · C 批', fmt(kc.mean, 4), `± ${fmt(kc.std, 4)}`);
   }
@@ -1210,11 +1221,19 @@ function renderDeepTiles(q, d, real, m) {
   }
   if (off('class_discrimination')) {
     put('任务判别', '不适用', why('class_discrimination'));
-  } else if (d.zebra_discrimination) {
-    const zb = d.zebra_discrimination.b || {};
-    const zc = d.zebra_discrimination.c || {};
-    put(`判别 · B 批（${refName}）`, pctv(zb.top1_accuracy, 2), `n=${zb.n} · ResNet-50 top1`, true);
-    put(`判别 · C 批（${refName}）`, pctv(zc.top1_accuracy, 2), `n=${zc.n} · 量化前后应接近`);
+  } else {
+    // 新格式：class_discrimination.{target, by_batch}；
+    // 旧格式（已入库的 horse2zebra quality.json）：zebra_discrimination.{b,c}
+    const cd = d.class_discrimination;
+    const legacy = d.zebra_discrimination;
+    const byBatch = cd ? cd.by_batch : legacy;
+    if (byBatch) {
+      const zb = byBatch.b || {};
+      const zc = byBatch.c || {};
+      const tgt = (cd && cd.target) || refName;
+      put(`判别 · B 批（${tgt}）`, pctv(zb.top1_accuracy, 2), `n=${zb.n} · ResNet-50 top1`, true);
+      put(`判别 · C 批（${tgt}）`, pctv(zc.top1_accuracy, 2), `n=${zc.n} · 量化前后应接近`);
+    }
   }
   if (d.anomalies) {
     put('异常登记', `${d.anomalies.count}`, `阈值 ssim(b,c) < ${d.anomalies.threshold}`);

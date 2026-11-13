@@ -373,9 +373,10 @@ FID/KID 参照批自动取 `eval/testB` 全量 140 张真实斑马图。
 **方向人工核对**：输入是斑马，A/B/C 三组输出的黑白条纹均消失、体色变为棕褐，
 形态更接近马 —— 方向正确，无反向生成。
 
-> 注意：绝对值不能与默认 pair 的 i5-1340P 数据同表比较（不同机器）；
-> 与同机 horse2zebra（A 254.3 / B 129.6 / C 35.9 ms）相比，本对整体慢约 25%，
-> 属同一台机器上的负载波动，不宜解读为模型差异。
+> 注意：绝对值不能与默认 pair 的 **i5-1340P** 数据同表比较（不同机器）。
+> 同机回归里 horse2zebra 是 A 254.3 / B 129.6 / C 35.9 ms（本机 AMD 实测，
+> 未覆盖仓库里那份 i5 基线），本对整体慢约 25%，属同一台机器上的负载波动，
+> 不宜解读为模型差异。
 
 ### 9.5 E4 跨类型层间对比（同机、同一套探针层、同样 120 张）
 
@@ -399,5 +400,7 @@ FID/KID 参照批自动取 `eval/testB` 全量 140 张真实斑马图。
   界面里它们的下拉项会显示「未就绪」。
 - 新迁移对的 `quality` 目前只有 **proxy** 指标（`metrics_source: "proxy"`），
   本机 venv 缺 `torchvision`，跑不了 `--deep`；接入真实感知指标前不得进入正式对比表。
-- `metrics_deep` 里 FID/KID 的键名仍是 `*_vs_real_zebra` 这种 horse2zebra 专用写法，
-  给 `zebra2horse`（参照域是马）开 `--deep` 前需要改成按 `ref_prefix` 命名。
+- 深指标字段名已按参照域参数化：FID/KID 键为 `<批>_vs_real_<ref_prefix>`
+  （斑马对仍是 `b_vs_real_zebra`，反向对会写成 `b_vs_real_horse`），
+  类别判别键改为 `class_discrimination.{target, by_batch}`；
+  界面同时兼容旧键 `zebra_discrimination`，已入库的 horse2zebra `quality.json` 无需重跑。

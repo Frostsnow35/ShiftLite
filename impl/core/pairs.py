@@ -94,6 +94,16 @@ class Pair:
         m = self.metrics.get(name)
         return m.get("reason", "") if isinstance(m, dict) else ""
 
+    def classifier_label(self) -> str:
+        """类别判别的目标 ImageNet 类（随迁移对方向取）。
+
+        horse2zebra → zebra；zebra2horse → horse。缺省回退到 ref_prefix。
+        """
+        m = self.metrics.get("class_discrimination")
+        if isinstance(m, dict) and m.get("imagenet_class"):
+            return m["imagenet_class"]
+        return self.ref_prefix
+
 
 def _paths(pair_id: str, ckpt_file: str) -> Paths:
     if pair_id == DEFAULT_PAIR:

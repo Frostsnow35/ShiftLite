@@ -824,20 +824,25 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
         ref = [np.asarray(load_image(z), dtype=np.uint8) for z in zebras]
         try:
             fb = inception_features(ref)
-            fid_block = {"n_generated": len(YB) or len(YC), "n_real": len(ref)}
+            fid_block = {"n_generated": len(YB) or len(YC), "n_real": len(ref),
+                         "ref_domain": PAIR.ref_prefix}
             kid_block = {}
             for tag, Y in (("b", YB), ("c", YC)):
                 if not Y:
                     continue
                 f = inception_features(Y)
-                fid_block[f"{tag}_vs_real_zebra"] = fid(f, fb)
-                kid_block[f"{tag}_vs_real_zebra"] = kid(
+                # 键名带参照域前缀（斑马对仍是 *_vs_real_zebra，与原口径一致；
+                # 反向对 zebra2horse 的参照域是马，就会写成 *_vs_real_horse，
+                # 不会出现「参照的是马、字段却叫 zebra」这种误导）
+                field = f"{tag}_vs_real_{PAIR.ref_prefix}"
+                fid_block[field] = fid(f, fb)
+                kid_block[field] = kid(
                     f, fb, n_subsets=100,
                     subset_size=min(50, len(Y), len(ref)))
                 _p(f"  FID({tag} vs 真实目标域 {PAIR.ref_prefix}) = "
-                   f"{fid_block[f'{tag}_vs_real_zebra']}  "
-                   f"KID = {kid_block[f'{tag}_vs_real_zebra']['mean']}"
-                   f"（subset {kid_block[f'{tag}_vs_real_zebra']['subset_size']}）")
+                   f"{fid_block[field]}  "
+                   f"KID = {kid_block[field]['mean']}"
+                   f"（subset {kid_block[field]['subset_size']}）")
             deep["fid"] = fid_block
             deep["kid"] = kid_block
         except Exception as e:
@@ -899,7 +904,7 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
         if not Y:
             continue
         try:
-            preds = target_probabilities(Y)
+            preds = target_probabilities(Y, substrings=(PAIR.classifier_label(),))
             acc = float(np.mean([p["is_target"] for p in preds]))
             disc[tag] = {
                 "top1_accuracy": round(acc, 6),
@@ -907,12 +912,15 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
                     float(np.mean([p["target_prob"] for p in preds])), 6),
                 "n": len(preds),
             }
-            _p(f"  斑马判别 top1（{tag} 批）= {acc:.2%}（n={len(preds)}）")
+            _p(f"  目标类别判别 top1（{tag} 批，{PAIR.ref_prefix}）= "
+               f"{acc:.2%}（n={len(preds)}）")
         except Exception as e:
-            _p(f"  [跳过] 斑马判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
+            _p(f"  [跳过] 目标类别判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
             deep['errors'].append({'metric': f'classifier_{tag}', 'error': str(e)})
     if disc:
-        deep["zebra_discrimination"] = disc
+        # 键名不再写死 zebra：反向对的目标类就是 horse。
+        # 旧键名 zebra_discrimination 仍在界面侧兼容读取，避免已入库 JSON 失效。
+        deep["class_discrimination"] = {"target": PAIR.ref_prefix, "by_batch": disc}
 
     # 异常仍计入全集均值；零异常也写空索引，避免残留旧登记。
     bad = [r for r in rows
