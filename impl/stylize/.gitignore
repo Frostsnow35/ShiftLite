@@ -1,0 +1,16 @@
+# 本目录是 AdaIN 支线（issue #32），与主线 A/B/C 口径隔离。
+# 权重与第三方图片不入库：前者 94 MB、后者有各自的版权，用命令取回。
+__pycache__/
+*.py[cod]
+
+# 官方权重（vgg_normalised.pth 76.4 MB + decoder.pth 13.4 MB）
+weights/
+
+# 分片下载中间文件
+*.part*
+
+# 风格图/内容图（公开数据集或官方示例，按需 fetch-samples）
+samples/
+
+# 本地调试产物
+*.onnx

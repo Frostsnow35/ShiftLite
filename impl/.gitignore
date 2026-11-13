@@ -30,6 +30,9 @@ artifacts/results/structure_review/*.png
 artifacts/results/_*
 artifacts/figures/*.png
 
+# ── AdaIN 支线产物（issue #32）：IR、出图、报告都不入库 ──
+artifacts/adain/
+
 # ── 编辑器 / 系统 ──
 .vscode/
 .idea/
