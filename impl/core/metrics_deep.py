@@ -317,11 +317,16 @@ def label_indices(substrings=_TARGET_LABEL_SUBSTRINGS) -> list[int]:
 
 
 def target_probabilities(images: list[np.ndarray],
-                         batch_size: int = 16) -> list[dict]:
-    """每图给出：目标类（斑马）概率之和、top1 类别与置信度。"""
+                         batch_size: int = 16,
+                         substrings: tuple[str, ...] = _TARGET_LABEL_SUBSTRINGS) -> list[dict]:
+    """每图给出：目标类概率之和、top1 类别与置信度。
+
+    substrings 指定目标 ImageNet 类别（随迁移对方向取：horse2zebra=zebra，
+    zebra2horse=horse），不再写死。
+    """
     m, w = resnet50_model()
     cats = list(w.meta["categories"])
-    hits = label_indices()
+    hits = label_indices(substrings)
 
     out = []
     # 使用权重配套 resize/crop/normalize，不能只将像素缩放到 0~1。

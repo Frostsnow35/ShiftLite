@@ -1,0 +1,28 @@
+{
+  "id": "style_monet",
+  "label": "照片 → 莫奈风格（风格型）",
+  "type": "style",
+  "checkpoint": {
+    "file": "style_monet.pth",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/style_monet.pth",
+    "bytes": 45575747
+  },
+  "dataset": {
+    "zip": "monet2photo.zip",
+    "url": "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/monet2photo.zip",
+    "size_mb": 291,
+    "input_prefix": "photo",
+    "ref_prefix": "monet",
+    "input_dir": "testB",
+    "ref_dir": "testA",
+    "calib_dir": "trainB"
+  },
+  "metrics": {
+    "lpips": true,
+    "fid_kid": true,
+    "edge_ssim": true,
+    "background_ssim": { "enabled": false, "reason": "画作无稳定前景掩码，背景区无定义" },
+    "mask_iou": { "enabled": false, "reason": "目标域为油画，Mask R-CNN 检不出可对齐实例" },
+    "class_discrimination": { "enabled": false, "reason": "ImageNet 无画作类别，判别无意义" }
+  }
+}

@@ -49,33 +49,66 @@ def _load(path: Path) -> dict | list:
         return json.load(f)
 
 
-def fig_e1_samples(results: Path, out: Path) -> Path:
-    """E1 基线出图拼图：输入马图 | PyTorch FP32 基线(a) | OV FP32(b) | OV INT8(c)。
+def _pair(pair=None):
+    """迁移对对象；不传则用默认 pair（horse2zebra）。"""
+    if pair is not None:
+        return pair
+    from core.pairs import DEFAULT_PAIR, load_pair
+    return load_pair(DEFAULT_PAIR)
 
-    E1 的交付定义是「基线推理跑通，马→斑马出图」（第五章进度表阶段②），所以
-    第一要义是证明官方权重在本仓库里能正常出图，顺带把三组并列展示。异常拼图
+
+def fig_e1_samples(results: Path, out: Path, pair=None) -> Path:
+    """E1 基线出图拼图：输入图 | PyTorch FP32 基线(a) | OV FP32(b) | OV INT8(c)。
+
+    E1 的交付定义是「基线推理跑通，输入域 → 目标域出图」（第五章进度表阶段②），
+    所以第一要义是证明官方权重在本仓库里能正常出图，顺带把三组并列展示。异常拼图
     （E3）不能替代它——那是失真样本，不是正常出图展示。
     """
     from core.metrics import ssim  # 与 quality 同一实现，口径一致
 
-    samples = ROOT / "artifacts" / "samples"
+    p = _pair(pair)
+    samples = p.paths.samples
+    eval_in = p.paths.eval_in
     quality_dir = results / "quality"
-    horses = sorted(samples.glob("horse_*.png"))[:3]
-    if not horses:
-        raise SystemExit("samples/ 里没有 horse_*.png，先跑 setup")
 
-    cols = ["输入马图", "A · PyTorch FP32（基线）", "B · OpenVINO FP32",
-            "C · OpenVINO INT8"]
-    n = len(horses)
+    # 素材来源：quality 产出的三组图决定"哪些图有输出"；
+    # 输入原图优先取演示样例，样例没有就退回该 pair 评测集（输入域）。
+    # 这样 E1 不要求 quality 一定跑在样例图上（正式口径跑的是评测集全量）。
+    inputs = []
+    for a in sorted(quality_dir.glob("*_A.png")):
+        stem = a.name[: -len("_A.png")]
+        src = None
+        for d in (samples, eval_in):
+            for ext in (".png", ".jpg", ".jpeg"):
+                cand = d / f"{stem}{ext}"
+                if cand.exists():
+                    src = cand
+                    break
+            if src:
+                break
+        if src is None:
+            continue
+        if all((quality_dir / f"{stem}_{g}.png").exists() for g in "ABC"):
+            inputs.append(src)
+        if len(inputs) >= 3:
+            break
+    if not inputs:
+        raise SystemExit(
+            f"E1 拼图缺素材：{quality_dir} 下没有同时具备 A/B/C 三组输出的图。"
+            f"先跑 `python cli.py quality --pair {p.id}` 生成三组输出图")
+
+    cols = [f"输入图（{p.input_prefix}）", "A · PyTorch FP32（基线）",
+            "B · OpenVINO FP32", "C · OpenVINO INT8"]
+    n = len(inputs)
     fig, axes = plt.subplots(n, 4, figsize=(12.8, 3.1 * n))
     if n == 1:
         axes = axes.reshape(1, 4)
     fig.suptitle(
-        f"E1 基线出图样例（{n} 张，官方 horse2zebra 预训练权重，无训练）\n"
+        f"E1 基线出图样例（{n} 张，官方 {p.id} 预训练权重，无训练）\n"
         "同一张输入分别走三组后端；SSIM 为全图结构相似度（与 quality.json 同一实现）",
         fontsize=10)
 
-    for i, hp in enumerate(horses):
+    for i, hp in enumerate(inputs):
         stem = hp.stem
         paths = [hp, quality_dir / f"{stem}_A.png",
                  quality_dir / f"{stem}_B.png", quality_dir / f"{stem}_C.png"]
@@ -160,9 +193,15 @@ def fig_e2_perf(results: Path, out: Path) -> Path:
 
 
 def fig_e3_anomalies(results: Path, out: Path) -> Path:
-    """异常样例拼图：输入马图 | OV FP32（b）| OV INT8（c），逐行标注指标与判读提示。"""
-    an = _load(results / "anomalies" / "anomalies.json")
+    """异常样例拼图：输入图 | OV FP32（b）| OV INT8（c），逐行标注指标与判读提示。"""
+    idx = results / "anomalies" / "anomalies.json"
+    if not idx.exists():
+        raise SystemExit(
+            f"没有异常登记（{idx}）：异常表由 `quality --deep` 生成，先跑一次深度评测")
+    an = _load(idx)
     quality_dir = results / "quality"
+    if not an:
+        raise SystemExit("异常登记为 0 例，无需出图（这本身是结论，如实记录即可）")
 
     n = len(an)
     if n == 0:
@@ -256,17 +295,25 @@ def _metric_text(value, digits=3):
     return '缺失' if value is None else f'{value:.{digits}f}'
 
 
-def quality_table(results: Path, out: Path) -> Path:
+def quality_table(results: Path, out: Path, pair=None) -> Path:
     """E3 质量对比表（markdown，报告直接引用）。"""
+    p = _pair(pair)
+    ref = p.ref_prefix           # 参照域（zebra / horse / monet / winter）
     q = _load(results / "quality.json")
+    if "deep" not in q:
+        raise SystemExit(
+            f"{p.id} 的 quality.json 没有 deep 字段（metrics_source={q.get('metrics_source')}）："
+            f"本表需要真实感知指标，先跑 `python cli.py quality --pair {p.id} --deep`")
     d = q["deep"]
     mean = q["mean"]
     lp = d["lpips"]
     fid = d["fid"]
     kid = d["kid"]
-    mask = d["mask"]
-    disc = d["zebra_discrimination"]
-    dice_n = mask['detected_pairs'] if 'mean_dice_ac' in mask else '未记录'
+    mask = d.get("mask") or {}
+    # 新结构 class_discrimination.{target, by_batch}；旧结构 zebra_discrimination.{b,c}
+    disc = (d.get("class_discrimination") or {}).get("by_batch") \
+        or d.get("zebra_discrimination")
+    k_b, k_c = f"b_vs_real_{ref}", f"c_vs_real_{ref}"
 
     def kid_str(key: str) -> str:
         k = kid[key]
@@ -274,8 +321,8 @@ def quality_table(results: Path, out: Path) -> Path:
                 f"（subset {k['subset_size']}×{k['n_subsets']}）")
 
     lines = [
-        "# E3 量化质量对比表（testA 生成批 n="
-        f"{lp['n_images']} / testB 参照批 n={fid['n_real']}）",
+        "# E3 量化质量对比表（"
+        f"{p.id}：生成批 n={lp['n_images']} / {ref} 参照批 n={fid['n_real']}）",
         "",
         "| 维度 | 指标 | 数值 | 说明 |",
         "|---|---|---|---|",
@@ -284,14 +331,34 @@ def quality_table(results: Path, out: Path) -> Path:
         f"| 总差异 | LPIPS(a,c) | {lp['L_ac']:.4f} | 原版到终版 |",
         f"| 逐像素 | SSIM(b,c) / PSNR(b,c) | {mean['ssim_bc']:.4f} / {mean['psnr_bc']:.2f} dB | 均值 |",
         f"| 结构（边缘） | Canny 边缘 SSIM(b,c) | {d['canny_edge_ssim_bc']:.4f} | 方案 §4 指定 Canny 版 |",
-        f"| 迁移质量 | FID(B vs 真实斑马) | {fid['b_vs_real_zebra']:.2f} | FP32 批 |",
-        f"| 迁移质量 | FID(C vs 真实斑马) | {fid['c_vs_real_zebra']:.2f} | INT8 批 |",
-        f"| 迁移质量 | KID(B) | {kid_str('b_vs_real_zebra')} | FP32 批 |",
-        f"| 迁移质量 | KID(C) | {kid_str('c_vs_real_zebra')} | INT8 批 |",
-        f"| 输出一致性 | 掩码 IoU(a,c) | {_metric_text(mask['mean_iou_ac'], 4)} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
-        f"| 输出一致性 | 掩码 Dice(a,c) | {_metric_text(mask.get('mean_dice_ac'), 4)} | 有效 {dice_n}/{lp['n_images']} 对；旧 JSON 未计算时显示缺失 |",
-        f"| 输出一致性（旧口径） | 背景 SSIM(a,c) | {_metric_text(mask['mean_background_ssim_ac'], 4)} | 前景填充后整图 SSIM；严格共同背景另表 |",
-        f"| 任务保真 | 斑马判别 top1（B / C） | {disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | n={disc['b']['n']}；差异应据实解释 |",
+        f"| 迁移质量 | FID(B vs 真实{ref}) | {fid[k_b]:.2f} | FP32 批 |",
+        f"| 迁移质量 | FID(C vs 真实{ref}) | {fid[k_c]:.2f} | INT8 批 |",
+        f"| 迁移质量 | KID(B) | {kid_str(k_b)} | FP32 批 |",
+        f"| 迁移质量 | KID(C) | {kid_str(k_c)} | INT8 批 |",
+    ]
+    # 结构 / 任务保真两维按 pair manifest 开关条件渲染：关闭的 pair 显示「不适用」
+    # 而非 KeyError（坑4：关闭指标的 pair 跑 quality/figures 不崩）。
+    if mask:
+        dice_n = mask['detected_pairs'] if 'mean_dice_ac' in mask else '未记录'
+        lines += [
+            f"| 结构（前景） | 掩码 IoU(a,c) | {_metric_text(mask['mean_iou_ac'], 4)} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
+            f"| 结构（前景） | 掩码 Dice(a,c) | {_metric_text(mask.get('mean_dice_ac'), 4)} | 有效 {dice_n}/{lp['n_images']} 对；旧 JSON 未计算时显示缺失 |",
+            f"| 结构（背景） | 背景 SSIM(a,c) | {_metric_text(mask['mean_background_ssim_ac'], 4)} | 掩码外区域 |",
+        ]
+    else:
+        lines.append(
+            f"| 结构（前景/背景） | 掩码 IoU / Dice / 背景 SSIM | 不适用 | "
+            f"{p.id} 未启用 mask_iou（见 pairs/*.json） |")
+    if disc:
+        lines.append(
+            f"| 任务保真 | {ref} 判别 top1（B / C） | "
+            f"{disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | "
+            f"n={disc['b']['n']}；差异应据实解释 |")
+    else:
+        lines.append(
+            f"| 任务保真 | 类别判别 | 不适用 | "
+            f"{p.id} 未启用 class_discrimination（见 pairs/*.json） |")
+    lines += [
         f"| 异常登记 | SSIM(b,c)<0.80 | {d['anomalies']['count']} 例 | 见 fig_e3_anomalies.png |",
         "",
         f"记号：a=PyTorch FP32，b=OV FP32，c=OV INT8；`metrics_source={q['metrics_source']}`。",
@@ -325,18 +392,28 @@ def structure_table(q: dict, out: Path) -> Path:
     return dest
 
 
-def make_all(results: Path | None = None, out: Path | None = None) -> list[Path]:
-    root = Path(__file__).resolve().parent.parent
-    results = results or root / "artifacts" / "results"
-    out = out or root / "artifacts" / "figures"
+def make_all(results: Path | None = None, out: Path | None = None,
+             pair=None) -> list[Path]:
+    """生成全部图表。单张图缺素材时只跳过该图，不拖垮其余图。"""
+    p = _pair(pair)
+    results = results or p.paths.results
+    out = out or results.parent / "figures"
     out.mkdir(parents=True, exist_ok=True)
-    produced = [
-        fig_e1_samples(results, out),
-        fig_e2_perf(results, out),
-        fig_e3_anomalies(results, out),
-        fig_e4_layers(results, out),
-        quality_table(results, out),
+    steps = [
+        ("E1 基线出图", lambda: fig_e1_samples(results, out, p)),
+        ("E2 三组性能", lambda: fig_e2_perf(results, out)),
+        ("E3 异常拼图", lambda: fig_e3_anomalies(results, out)),
+        ("E4 层间曲线", lambda: fig_e4_layers(results, out)),
+        ("E3 质量对比表", lambda: quality_table(results, out, p)),
     ]
+    produced: list[Path] = []
+    for name, fn in steps:
+        try:
+            produced.append(fn())
+        except SystemExit as e:
+            print(f"  [跳过] {name}：{e}")
+        except Exception as e:
+            print(f"  [跳过] {name}：{type(e).__name__}: {e}")
     return produced
 
 

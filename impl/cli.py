@@ -27,46 +27,79 @@ MODELS = ART / "models"
 SAMPLES = ART / "samples"
 RESULTS = ART / "results"
 
-# 权重的下载源（按优先级逐个尝试）。
-# PLAN §3.3 写的是"双源"，但实际只 anchor 得住一个：伯克利直链 200 OK、
-# content-length 45575747 与 MODEL_BYTES 完全对得上，是验过的；
-# HuggingFace 上没找到能确认可用的同名权重仓库（HF API 在本环境不可达，
-# 编一个 URL 进去只会让人白等），所以暂不列第二源。要用备源就用
-# 环境变量 SHIFTLITE_WEIGHTS_URL 指过去，它会被排在最前面。
-MODEL_SOURCES = [
-    ("伯克利官方", "http://efrosgans.eecs.berkeley.edu/cyclegan/pretrained_models/"
-                   "horse2zebra.pth"),
-]
-MODEL_BYTES = 45575747
+# 权重下载源由 pairs/<id>.json 的 checkpoint 段决定（见下方 model_sources()）。
 
 
 def model_sources() -> list[tuple[str, str]]:
+    """当前 pair 的权重下载源。
+
+    仍只 anchor 一个源：伯克利直链 200 OK、content-length 与 manifest 里的
+    bytes 完全对得上，是验过的；HuggingFace 上没有能确认可用的同名权重仓库，
+    编一个 URL 进去只会让人白等。要用备源就用环境变量
+    SHIFTLITE_WEIGHTS_URL 指过去，它会被排在最前面。
+    """
+    src = [(f"{PAIR.id} 官方", PAIR.ckpt_url)]
     override = os.environ.get("SHIFTLITE_WEIGHTS_URL", "").strip()
     if override:
-        return [("环境变量 SHIFTLITE_WEIGHTS_URL", override)] + MODEL_SOURCES
-    return MODEL_SOURCES
+        return [("环境变量 SHIFTLITE_WEIGHTS_URL", override)] + src
+    return src
 
-# 样例图与校准集来源（按优先级尝试；mini 只有 1.8MB，几秒下完）
-DATASET_SOURCES = [
-    ("horse2zebra.zip", "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/"
-                        "horse2zebra.zip", 111),
-    ("mini.zip", "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/"
-                 "mini.zip", 1.8),
-]
+# ── 迁移对（pair）：把「换权重即换应用」从代码挪到配置 ──────────────
+# 权威配置在 pairs/<id>.json。默认 pair 沿用既有平铺路径（已入库的正式口径
+# 证据不受影响），其余 pair 落在 artifacts/<id>/ 下，互不覆盖。
+from core.pairs import DEFAULT_PAIR, list_pairs, load_pair  # noqa: E402
 
-CALIB = ART / "calib"
-
-# 方案 §4 正式评测口径：生成批 = testA 全部马图，FID/KID 参照批 = testB 全部斑马图。
-# samples/ 只放演示用的前几张；完整评测集单独落 eval/，与演示样例、校准集三分。
+PAIR = load_pair(DEFAULT_PAIR)
+MODELS = PAIR.paths.models
+SAMPLES = PAIR.paths.samples
+CALIB = PAIR.paths.calib
+RESULTS = PAIR.paths.results
 EVAL = ART / "eval"
-EVAL_A = EVAL / "testA"
-EVAL_B = EVAL / "testB"
+EVAL_IN = PAIR.paths.eval_in
+EVAL_REF = PAIR.paths.eval_ref
+MODEL_BYTES = PAIR.ckpt_bytes
 
-# 方案 §3.3 口径：校准集取 trainA 前 300 张马图，与评测所用 test 集隔离；
+
+def _dataset_sources(pair) -> list[tuple[str, str, float]]:
+    """当前 pair 的主数据集包 + mini 兜底。
+
+    mini 每个域只有 10 张（实测 45 个条目），只能用来跑通流程，
+    支撑不了「校准 trainA 300 张 / 评测 testA+testB 全量」的正式口径。
+    """
+    return [
+        (pair.dataset_zip, pair.dataset_url, pair.dataset_mb),
+        ("mini.zip", "http://efrosgans.eecs.berkeley.edu/cyclegan/datasets/"
+                     "mini.zip", 1.8),
+    ]
+
+
+DATASET_SOURCES = _dataset_sources(PAIR)
+
+# 方案 §3.3 口径：校准集取 trainA 前 300 张，与评测所用 test 集隔离；
 # 演示/评测样例取 testA、testB。三者来源不同，不可互相替代。
 CALIB_SUBSET = 300
 N_SAMPLE_HORSE = 6
 N_SAMPLE_ZEBRA = 3
+
+
+def select_pair(pair_id: str = DEFAULT_PAIR) -> None:
+    """切换当前迁移对：重绑全部路径与数据来源常量。
+
+    用模块级全局是为了让既有函数签名保持不动（它们都直接读 MODELS/SAMPLES/…）。
+    CLI 是单次进程、子命令互斥，这么做不会有并发问题。
+    """
+    global PAIR, MODELS, SAMPLES, CALIB, RESULTS, EVAL_IN, EVAL_REF
+    global MODEL_BYTES, DATASET_SOURCES
+    p = load_pair(pair_id)
+    PAIR = p
+    MODELS = p.paths.models
+    SAMPLES = p.paths.samples
+    CALIB = p.paths.calib
+    RESULTS = p.paths.results
+    EVAL_IN = p.paths.eval_in
+    EVAL_REF = p.paths.eval_ref
+    MODEL_BYTES = p.ckpt_bytes
+    DATASET_SOURCES = _dataset_sources(p)
 
 _IMG_EXTS = {".jpg", ".jpeg", ".png"}
 
@@ -108,18 +141,104 @@ def _resume_download(url: str, dst: Path, validator=None, attempts: int = 40) ->
     return dst
 
 
+def _content_length(url: str) -> int | None:
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            n = r.headers.get("Content-Length")
+            return int(n) if n else None
+    except Exception:
+        return None
+
+
+def _parallel_download(url: str, dst: Path, total: int, parts: int = 4) -> Path:
+    """分段并发下载（每段写独立 .partN，最后拼接）。
+
+    为什么需要它：伯克利那台 Apache 对**长时间单连接**限速很狠。实测单连接
+    跑满 45 MB 平均只有 ~80 KB/s，而每次只请求 4 MB 的有界区间能到 ~180 KB/s。
+    分段后每段新建连接，既绕开长连接限速，也避免"卡住要等 90 秒超时"的空转。
+
+    为什么不预分配目标文件再各段 seek 写入：那样 `stat` 会立刻显示文件已达
+    完整大小，看起来像"秒下完"，实际分片还在写——进度不可观测，也容易被误判
+    成成功。写独立分片文件可以让「已下载字节数」= 各分片大小之和，真实可信。
+
+    注意：**同一个目标文件绝不能被两个进程同时下载**——两边各自按"已有大小"
+    推算 Range 起点，会互相覆盖成坏文件。
+    """
+    import shutil
+    from concurrent.futures import ThreadPoolExecutor
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    seg = (total + parts - 1) // parts
+    ranges = [(i * seg, min(total, (i + 1) * seg) - 1) for i in range(parts)]
+    part_paths = [dst.with_name(f"{dst.name}.part{i}") for i in range(parts)]
+
+    def worker(i: int) -> None:
+        start, end = ranges[i]
+        req = urllib.request.Request(url)
+        req.add_header("Range", f"bytes={start}-{end}")
+        with urllib.request.urlopen(req, timeout=180) as r, open(part_paths[i], "wb") as f:
+            while True:
+                chunk = r.read(1 << 16)
+                if not chunk:
+                    break
+                f.write(chunk)
+
+    try:
+        with ThreadPoolExecutor(max_workers=parts) as ex:
+            for fu in [ex.submit(worker, i) for i in range(parts)]:
+                fu.result()
+
+        with open(dst, "wb") as out:
+            for i, (start, end) in enumerate(ranges):
+                expect = end - start + 1
+                got = part_paths[i].stat().st_size
+                if got != expect:
+                    raise RuntimeError(f"分片 {i} 大小不符：{got}/{expect}")
+                with open(part_paths[i], "rb") as f:
+                    shutil.copyfileobj(f, out)
+    finally:
+        for p in part_paths:
+            p.unlink(missing_ok=True)
+
+    return dst
+
+
+def _ensure_file(url: str, dst: Path, total: int,
+                 validator=None, parts: int = 4) -> Path:
+    """把 dst 备齐到 total 字节：能用就复用，不能用就分段并发重下。"""
+    ok = validator or (lambda p: p.exists() and p.stat().st_size >= total)
+    if ok(dst):
+        return dst
+    if dst.exists():
+        _p(f"  文件不完整（{dst.stat().st_size}/{total} B），重新分段下载…")
+        dst.unlink()
+    _p(f"  分段并发下载（{parts} 路，{total/1024/1024:.1f} MB）…")
+    try:
+        _parallel_download(url, dst, total, parts)
+    except Exception as e:
+        _p(f"  分段下载失败（{type(e).__name__}），回退单连接续传…")
+        if dst.exists():
+            dst.unlink()
+        _resume_download(url, dst, validator)
+        return dst
+    if not ok(dst):
+        raise SystemExit(f"下载校验失败：{dst}（{dst.stat().st_size}/{total} B）")
+    return dst
+
+
 def download_model(force: bool = False) -> Path:
     MODELS.mkdir(parents=True, exist_ok=True)
-    dst = MODELS / "horse2zebra.pth"
+    dst = PAIR.weights
     ok = lambda p: p.exists() and p.stat().st_size >= MODEL_BYTES
     if ok(dst) and not force:
         _p(f"  [跳过] 权重已存在 {dst.stat().st_size/1024/1024:.1f} MB")
         return dst
-    _p("  下载预训练权重（支持断点续传）…")
+    _p("  下载预训练权重（分段并发，支持断点续传）…")
     for label, url in model_sources():
         try:
             _p(f"  尝试 {label}…")
-            _resume_download(url, dst, ok)
+            _ensure_file(url, dst, MODEL_BYTES, ok)
             if ok(dst):
                 _p(f"  [完成] {dst} ({dst.stat().st_size/1024/1024:.1f} MB)"
                    f"，来源：{label}")
@@ -129,7 +248,7 @@ def download_model(force: bool = False) -> Path:
             _p(f"  [放弃] {label} 不可用，换下一个源")
             continue
     raise SystemExit(
-        "权重下载失败：所有镜像都不可用。手动下载 horse2zebra.pth 放到 "
+        f"权重下载失败：所有镜像都不可用。手动下载 {PAIR.ckpt_file} 放到 "
         f"{dst} 后重跑 setup 即可（完整大小 {MODEL_BYTES/1024/1024:.1f} MB）。")
 
 
@@ -176,9 +295,14 @@ def download_dataset() -> Path:
     for fname, url, size_mb in DATASET_SOURCES:
         dst = ART / fname
         try:
-            _p(f"  下载 {fname}（约 {size_mb} MB，支持断点续传）…")
-            _resume_download(url, dst, _zip_ok,
-                             attempts=20 if size_mb < 10 else 4)
+            total = _content_length(url)
+            if total:
+                _p(f"  下载 {fname}（{total/1024/1024:.1f} MB，分段并发）…")
+                _ensure_file(url, dst, total, _zip_ok)
+            else:
+                _p(f"  下载 {fname}（约 {size_mb} MB，单连接续传）…")
+                _resume_download(url, dst, _zip_ok,
+                                 attempts=20 if size_mb < 10 else 4)
             _p(f"  [完成] {fname}（{dst.stat().st_size/1024/1024:.1f} MB）")
             return dst
         except SystemExit:
@@ -217,44 +341,43 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
             skipped.append(f"{name}（{type(e).__name__}）")
             return False
 
+    def _sel(names: list[str], sub: str) -> list[str]:
+        return sorted(n for n in names
+                      if f"/{sub}/" in n and n.lower().endswith(".jpg"))
+
     with zipfile.ZipFile(zip_path) as z:
         names = z.namelist()
         # 样例优先取官方测试集；测试集缺失时才退回训练集
-        horse_test = sorted(n for n in names
-                            if "/testA/" in n and n.lower().endswith(".jpg"))
-        horse_train = sorted(n for n in names
-                             if "/trainA/" in n and n.lower().endswith(".jpg"))
-        zebra_test = sorted(n for n in names
-                            if "/testB/" in n and n.lower().endswith(".jpg"))
-        zebra_train = sorted(n for n in names
-                             if "/trainB/" in n and n.lower().endswith(".jpg"))
-        horses = horse_test or horse_train
-        zebras = zebra_test or zebra_train
-        if not horses:
-            raise SystemExit(f"{zip_path.name} 里找不到马（A 域）图像")
+        inputs = (_sel(names, PAIR.input_dir)
+                  or _sel(names, PAIR.input_dir.replace("test", "train")))
+        refs = (_sel(names, PAIR.ref_dir)
+                or _sel(names, PAIR.ref_dir.replace("test", "train")))
+        if not inputs:
+            raise SystemExit(
+                f"{zip_path.name} 里找不到输入域图像（{PAIR.input_dir}）：{PAIR.label}")
 
         used = 0
-        for i, name in enumerate(horses[:n_horse], 1):
-            if save(z, name, SAMPLES / f"horse_{i:02d}.png"):
+        for i, name in enumerate(inputs[:n_horse], 1):
+            if save(z, name, SAMPLES / f"{PAIR.input_prefix}_{i:02d}.png"):
                 used += 1
-        for i, name in enumerate(zebras[:n_zebra], 1):
-            if save(z, name, SAMPLES / f"zebra_{i:02d}.png"):
+        for i, name in enumerate(refs[:n_zebra], 1):
+            if save(z, name, SAMPLES / f"{PAIR.ref_prefix}_{i:02d}.png"):
                 used += 1
 
         # 校准集：trainA 前 n_calib 张（方案 §3.3），与 testA/testB 评测集隔离。
-        if not horse_train:
+        calib_src = _sel(names, PAIR.calib_dir)
+        if not calib_src:
             raise SystemExit(
-                f"{zip_path.name} 里没有 trainA（训练集马图），无法准备校准集。\n"
-                f"        请删除 {zip_path} 后重跑 setup 以下载完整版 horse2zebra.zip。")
-        calib_src = horse_train
+                f"{zip_path.name} 里没有 {PAIR.calib_dir}（训练集）图像，无法准备校准集。\n"
+                f"        请删除 {zip_path} 后重跑 setup 以下载完整版 {PAIR.dataset_zip}。")
         calib_n = min(len(calib_src), n_calib)
         written = []
         for i, name in enumerate(calib_src[:calib_n], 1):
             if save(z, name, CALIB / f"calib_{i:03d}.png"):
                 written.append(name)
 
-        # 完整评测集（方案 §4）：testA/testB 全量，与 samples/ 演示样例分开存放。
-        eval_a, eval_b = _extract_eval_sets(z, skipped, zip_path.name)
+        # 完整评测集（方案 §4）：输入域/参照域全量，与 samples/ 演示样例分开存放。
+        n_in, n_ref = _extract_eval_sets(z, skipped, zip_path.name)
 
     # 留一份来源清单，报告里可以据此证明校准集与评测集不重叠
     (CALIB / "manifest.json").write_text(
@@ -263,14 +386,14 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
             "calib_prefix": dir_prefix(calib_src),
             "requested": n_calib,
             "written": len(written),
-            "eval_samples_prefix": dir_prefix(horses[:n_horse]),
+            "eval_samples_prefix": dir_prefix(inputs[:n_horse]),
             "files": written[:10],
             "skipped_count": len(skipped),
             "skipped": skipped[:20],
         }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {len(written)} 张，"
-       f"评测集 testA {eval_a} 张 / testB {eval_b} 张")
+       f"评测集 输入批 {n_in} 张（{PAIR.input_dir}）/ 参照批 {n_ref} 张（{PAIR.ref_dir}）")
     if skipped:
         _p(f"  ⚠️ {len(skipped)} 个 zip 条目解压失败已跳过（见 calib/manifest.json）")
     if len(written) < n_calib:
@@ -282,45 +405,49 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
 def _extract_eval_sets(z, skipped: list[str], zip_name: str) -> tuple[int, int]:
     """从已打开的数据集 zip 解压完整评测集（方案 §4）。
 
-    testA 全部马图 → eval/testA，testB 全部斑马图 → eval/testB。
+    按「角色」落盘，不按 zip 的 testA/testB 落盘：
+      输入域（pair.input_dir）→ eval/input，参照域（pair.ref_dir）→ eval/ref。
     原始 jpg 字节直接落盘（不重编码），与 zip 条目逐一对应。
     """
     names = z.namelist()
-    horse_test = sorted(n for n in names
-                        if "/testA/" in n and n.lower().endswith(".jpg"))
-    zebra_test = sorted(n for n in names
-                        if "/testB/" in n and n.lower().endswith(".jpg"))
-    if not horse_test and not zebra_test:
+    inp = sorted(n for n in names
+                 if f"/{PAIR.input_dir}/" in n and n.lower().endswith(".jpg"))
+    ref = sorted(n for n in names
+                 if f"/{PAIR.ref_dir}/" in n and n.lower().endswith(".jpg"))
+    if not inp and not ref:
         return 0, 0
 
-    EVAL_A.mkdir(parents=True, exist_ok=True)
-    EVAL_B.mkdir(parents=True, exist_ok=True)
+    EVAL_IN.mkdir(parents=True, exist_ok=True)
+    EVAL_REF.mkdir(parents=True, exist_ok=True)
     n_a = n_b = 0
-    for name in horse_test:
+    for name in inp:
         try:
-            (EVAL_A / Path(name).name).write_bytes(z.read(name))
+            (EVAL_IN / Path(name).name).write_bytes(z.read(name))
             n_a += 1
         except Exception as e:
             skipped.append(f"{name}（{type(e).__name__}）")
-    for name in zebra_test:
+    for name in ref:
         try:
-            (EVAL_B / Path(name).name).write_bytes(z.read(name))
+            (EVAL_REF / Path(name).name).write_bytes(z.read(name))
             n_b += 1
         except Exception as e:
             skipped.append(f"{name}（{type(e).__name__}）")
 
-    (EVAL / "manifest.json").write_text(
+    (EVAL_IN.parent / "manifest.json").write_text(
         json.dumps({
             "source_zip": zip_name,
-            "testA": {"entries": len(horse_test), "written": n_a},
-            "testB": {"entries": len(zebra_test), "written": n_b},
-            "protocol": "方案 §4：生成批 = testA 全量，FID/KID 参照批 = testB 全量",
+            "pair": PAIR.id,
+            "input": {"role": "生成批", "from": PAIR.input_dir,
+                      "entries": len(inp), "written": n_a},
+            "ref": {"role": "FID/KID 参照批", "from": PAIR.ref_dir,
+                    "entries": len(ref), "written": n_b},
+            "protocol": "方案 §4：生成批 = 输入域全量，FID/KID 参照批 = 目标域全量",
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     return n_a, n_b
 
 
 def prepare_eval() -> tuple[int, int]:
-    """确保完整评测集就位（eval/testA、eval/testB），返回 (马图数, 斑马图数)。
+    """确保完整评测集就位（eval/input、eval/ref），返回 (输入批数, 参照批数)。
 
     已解压则直接返回；本地没有数据集 zip 时安静跳过，
     调用方回退到 samples/ 的演示样例并提示样本量不足。
@@ -329,7 +456,7 @@ def prepare_eval() -> tuple[int, int]:
         return ([p for p in d.iterdir() if p.suffix.lower() in _IMG_EXTS]
                 if d.exists() else [])
 
-    a, b = count(EVAL_A), count(EVAL_B)
+    a, b = count(EVAL_IN), count(EVAL_REF)
     if a and b:
         return len(a), len(b)
 
@@ -343,24 +470,33 @@ def prepare_eval() -> tuple[int, int]:
         return _extract_eval_sets(z, skipped, zip_path.name)
 
 
-def eval_horse_paths(limit: int | None = None) -> list[Path]:
-    """评测马图（生成批输入）：优先 eval/testA 全量（方案 §4），退而求其次 samples/horse_*。"""
-    ps = (sorted(p for p in EVAL_A.iterdir() if p.suffix.lower() in _IMG_EXTS)
-          if EVAL_A.exists() else [])
-    if not ps:
-        ps = sorted(p for p in SAMPLES.iterdir()
-                    if p.suffix.lower() in _IMG_EXTS and p.name.startswith("horse"))
+def _list_imgs(d: Path, prefix: str | None = None) -> list[Path]:
+    if not d.exists():
+        return []
+    return sorted(p for p in d.iterdir()
+                  if p.suffix.lower() in _IMG_EXTS
+                  and (prefix is None or p.name.startswith(prefix)))
+
+
+def eval_input_paths(limit: int | None = None) -> list[Path]:
+    """生成批输入：优先 eval/input 全量（方案 §4），退而求其次 samples/<input_prefix>_*。"""
+    ps = _list_imgs(EVAL_IN) or _list_imgs(SAMPLES, PAIR.input_prefix)
     return ps[:limit] if limit else ps
+
+
+def eval_ref_paths(limit: int | None = None) -> list[Path]:
+    """FID/KID 参照批（真实目标域）：优先 eval/ref 全量，退而其次 samples/<ref_prefix>_*。"""
+    ps = _list_imgs(EVAL_REF) or _list_imgs(SAMPLES, PAIR.ref_prefix)
+    return ps[:limit] if limit else ps
+
+
+# 兼容旧名：既有调用点与报告口径按 horse/zebra 命名，语义已由 pair 决定
+def eval_horse_paths(limit: int | None = None) -> list[Path]:
+    return eval_input_paths(limit)
 
 
 def eval_zebra_paths(limit: int | None = None) -> list[Path]:
-    """FID/KID 参照批（真实目标域）：优先 eval/testB 全量（方案 §4），退而求其次 samples/zebra_*。"""
-    ps = (sorted(p for p in EVAL_B.iterdir() if p.suffix.lower() in _IMG_EXTS)
-          if EVAL_B.exists() else [])
-    if not ps:
-        ps = sorted(p for p in SAMPLES.iterdir()
-                    if p.suffix.lower() in _IMG_EXTS and p.name.startswith("zebra"))
-    return ps[:limit] if limit else ps
+    return eval_ref_paths(limit)
 
 
 def cmd_setup(args):
@@ -374,7 +510,7 @@ def cmd_setup(args):
     from core.convert import build_ir, verify_against_torch
 
     _p("== 3/4 PyTorch 直转 OpenVINO IR（不经 ONNX）==")
-    xml = MODELS / "horse2zebra.xml"
+    xml = PAIR.xml
     if xml.exists() and not args.force:
         _p(f"  [跳过] {xml.name}")
     else:
@@ -382,7 +518,7 @@ def cmd_setup(args):
         _p(f"  [完成] {xml.name}")
 
     # 判据要用真实图像：造出来的随机输入值域约 ±3，不是真实输入分布
-    ref = sorted(SAMPLES.glob("horse_*.png"))
+    ref = sorted(SAMPLES.glob(f"{PAIR.input_prefix}_*.png"))
     report = verify_against_torch(weights, xml, image=ref[0] if ref else None)
     _p(f"  验证输入：{report.get('input_image') or '固定随机输入（样例图缺失）'}")
     _p(f"  转换正确性：max|Δ|={report['max_gray']} 灰度级，"
@@ -393,7 +529,7 @@ def cmd_setup(args):
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _p("== 4/4 NNCF INT8 量化 ==")
-    int8 = MODELS / "horse2zebra_int8.xml"
+    int8 = PAIR.int8_xml
     if int8.exists() and not args.force:
         _p(f"  [跳过] {int8.name}")
     else:
@@ -430,16 +566,14 @@ def cmd_bench(args):
     from core.mem import rss_mb
     from core.utils import SIZE
 
-    rt = Runtime(MODELS / "horse2zebra.pth",
-                 MODELS / "horse2zebra.xml",
-                 MODELS / "horse2zebra_int8.xml")
+    rt = Runtime(PAIR.weights, PAIR.xml, PAIR.int8_xml)
     avail = rt.availability()
     if not any(avail.values()):
         raise SystemExit("没有任何可用模型，先跑 python cli.py setup")
 
     # 测速输入也换成真实图像：与时延相关的是计算量，用真实分布能顺带记录
     # 一次有代表性的输入；取不到样例图时退回固定随机输入。
-    ref = sorted(SAMPLES.glob("horse_*.png"))
+    ref = sorted(SAMPLES.glob(f"{PAIR.input_prefix}_*.png"))
     if ref:
         from core.utils import load_image, to_tensor
         x = to_tensor(load_image(ref[0])).astype(np.float32)
@@ -545,9 +679,7 @@ def cmd_quality(args):
     from core.metrics import (ssim, edge_ssim, mae, psnr, lpips_three_way)
     from core.utils import load_image, to_tensor, to_image
 
-    rt = Runtime(MODELS / "horse2zebra.pth",
-                 MODELS / "horse2zebra.xml",
-                 MODELS / "horse2zebra_int8.xml")
+    rt = Runtime(PAIR.weights, PAIR.xml, PAIR.int8_xml)
     avail = rt.availability()
 
     out_dir = RESULTS / "quality"
@@ -559,7 +691,7 @@ def cmd_quality(args):
         raise SystemExit("没有评测马图，先跑 python cli.py setup")
     if len(horses) < args.limit:
         _p(f"  ⚠️ 评测图只有 {len(horses)} 张（--limit {args.limit}），"
-           f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
+           f"方案 §4 口径是输入域全量（{PAIR.input_dir} 全部），报告请如实写明实际样本量")
 
     rows = []
     YA, YB, YC, inputs = [], [], [], []
@@ -692,36 +824,46 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
         ref = [np.asarray(load_image(z), dtype=np.uint8) for z in zebras]
         try:
             fb = inception_features(ref)
-            fid_block = {"n_generated": len(YB) or len(YC), "n_real": len(ref)}
+            fid_block = {"n_generated": len(YB) or len(YC), "n_real": len(ref),
+                         "ref_domain": PAIR.ref_prefix}
             kid_block = {}
             for tag, Y in (("b", YB), ("c", YC)):
                 if not Y:
                     continue
                 f = inception_features(Y)
-                fid_block[f"{tag}_vs_real_zebra"] = fid(f, fb)
-                kid_block[f"{tag}_vs_real_zebra"] = kid(
+                # 键名带参照域前缀（斑马对仍是 *_vs_real_zebra，与原口径一致；
+                # 反向对 zebra2horse 的参照域是马，就会写成 *_vs_real_horse，
+                # 不会出现「参照的是马、字段却叫 zebra」这种误导）
+                field = f"{tag}_vs_real_{PAIR.ref_prefix}"
+                fid_block[field] = fid(f, fb)
+                kid_block[field] = kid(
                     f, fb, n_subsets=100,
                     subset_size=min(50, len(Y), len(ref)))
-                _p(f"  FID({tag} vs 真实斑马) = {fid_block[f'{tag}_vs_real_zebra']}  "
-                   f"KID = {kid_block[f'{tag}_vs_real_zebra']['mean']}"
-                   f"（subset {kid_block[f'{tag}_vs_real_zebra']['subset_size']}）")
+                _p(f"  FID({tag} vs 真实目标域 {PAIR.ref_prefix}) = "
+                   f"{fid_block[field]}  "
+                   f"KID = {kid_block[field]['mean']}"
+                   f"（subset {kid_block[field]['subset_size']}）")
             deep["fid"] = fid_block
             deep["kid"] = kid_block
         except Exception as e:
             deep['errors'].append({'metric': 'fid/kid', 'error': str(e)})
             _p(f"  [跳过] FID/KID：{type(e).__name__}: {str(e)[:160]}")
     else:
-        _p("  [跳过] FID/KID：没有 zebra 参照批（eval/testB 或 samples）")
+        _p(f"  [跳过] FID/KID：没有目标域参照批（eval/{PAIR.ref_dir} 或 samples）")
 
     # 输入保真 X→A/B/C 与输出一致性 A→C 分开；掩码不是人工真值。
-    if all(have.values()):
+    # 域型/风格型 pair 没有稳定前景、也无可对齐的 COCO 类别，按 manifest 关闭。
+    if all(have.values()) and PAIR.metric_enabled("mask_iou"):
         try:
             from core.structure import measure_structure, write_review_materials
             images = {'X': inputs, 'A': YA, 'B': YB, 'C': YC}
             detections = {}
             for side, batch in images.items():
                 _p(f"  Mask R-CNN: {side} ({len(batch)} images)")
-                detections[side] = instance_masks(batch, label='horse' if side == 'X' else 'zebra')
+                # 检测类随迁移对方向取：输入域（X）用 input_prefix，输出域用 ref_prefix。
+                # 仅 horse2zebra / zebra2horse 启用掩码 IoU，两者前缀恰为 COCO 类。
+                label = PAIR.input_prefix if side == 'X' else PAIR.ref_prefix
+                detections[side] = instance_masks(batch, label=label)
             structure = measure_structure(rows, images, detections)
             write_review_materials(structure, rows, images, detections, RESULTS / 'structure_review')
             deep['structure'] = structure
@@ -750,14 +892,19 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
         except Exception as e:
             deep['errors'].append({'metric': 'structure', 'error': str(e)})
             _p(f"  [失败] 结构评测：{type(e).__name__}: {e}")
+    elif not PAIR.metric_enabled("mask_iou"):
+        _p(f"  [不适用] 结构评测 / 掩码 IoU / 背景 SSIM："
+           f"{PAIR.metric_reason('mask_iou') or '该 pair 未启用'}")
 
-    # 5) 斑马判别准确率（任务保真；方案 §4「量化前后」→ b、c 两批各评一次）
+    # 5) 目标类别判别（任务保真；方案 §4「量化前后」→ b、c 两批各评一次）
+    #    ImageNet 没有 winter / 画作等类别，域型与风格型 pair 按 manifest 关闭
     disc = {}
-    for tag, Y in (("b", YB), ("c", YC)):
+    for tag, Y in ((("b", YB), ("c", YC))
+                   if PAIR.metric_enabled("class_discrimination") else ()):
         if not Y:
             continue
         try:
-            preds = target_probabilities(Y)
+            preds = target_probabilities(Y, substrings=(PAIR.classifier_label(),))
             acc = float(np.mean([p["is_target"] for p in preds]))
             disc[tag] = {
                 "top1_accuracy": round(acc, 6),
@@ -765,12 +912,15 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
                     float(np.mean([p["target_prob"] for p in preds])), 6),
                 "n": len(preds),
             }
-            _p(f"  斑马判别 top1（{tag} 批）= {acc:.2%}（n={len(preds)}）")
+            _p(f"  目标类别判别 top1（{tag} 批，{PAIR.ref_prefix}）= "
+               f"{acc:.2%}（n={len(preds)}）")
         except Exception as e:
-            _p(f"  [跳过] 斑马判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
+            _p(f"  [跳过] 目标类别判别（{tag} 批）：{type(e).__name__}: {str(e)[:160]}")
             deep['errors'].append({'metric': f'classifier_{tag}', 'error': str(e)})
     if disc:
-        deep["zebra_discrimination"] = disc
+        # 键名不再写死 zebra：反向对的目标类就是 horse。
+        # 旧键名 zebra_discrimination 仍在界面侧兼容读取，避免已入库 JSON 失效。
+        deep["class_discrimination"] = {"target": PAIR.ref_prefix, "by_batch": disc}
 
     # 异常仍计入全集均值；零异常也写空索引，避免残留旧登记。
     bad = [r for r in rows
@@ -804,10 +954,24 @@ def _deep_metrics(YA, YB, YC, rows, out_dir, args, inputs) -> dict:
         deep["anomalies"] = {"count": 0, "index": None,
                              "threshold": args.anomaly_threshold}
         _p(f"  异常样例 0 张（ssim_bc 均 ≥ {args.anomaly_threshold}）")
-    required = ('lpips', 'fid', 'kid', 'structure', 'mask', 'zebra_discrimination')
+    # 必需项按 manifest 指标开关动态构造：关闭的 pair 不应恒为 partial。
+    required = ['lpips', 'fid', 'kid']
+    not_applicable = []
+    if PAIR.metric_enabled('mask_iou'):
+        required += ['structure', 'mask']
+    else:
+        not_applicable.append(
+            f"掩码 IoU / 结构评测 / 背景 SSIM：{PAIR.metric_reason('mask_iou') or '该 pair 未启用'}")
+    if PAIR.metric_enabled('class_discrimination'):
+        required += ['class_discrimination']
+    else:
+        not_applicable.append(
+            f"类别判别：{PAIR.metric_reason('class_discrimination') or '该 pair 未启用'}")
+    disc_ok = (set(disc) == {'b', 'c'}) if PAIR.metric_enabled('class_discrimination') else True
+    deep['not_applicable'] = not_applicable
     deep['complete'] = (all(have.values()) and not deep['errors']
                         and all(k in deep for k in required)
-                        and set(disc) == {'b', 'c'})
+                        and disc_ok)
     return deep
 
 def cmd_layers(args):
@@ -815,7 +979,7 @@ def cmd_layers(args):
     from core.layers import layer_report, load_images
     from core.quantize import collect_calibration
 
-    if not (MODELS / "horse2zebra.pth").exists():
+    if not PAIR.weights.exists():
         raise SystemExit("没有预训练权重，先跑 python cli.py setup")
 
     if not CALIB.exists() or not any(CALIB.iterdir()):
@@ -833,9 +997,9 @@ def cmd_layers(args):
         _p(f"  ⚠️ 评测图只有 {len(paths)} 张（--limit {args.limit}），"
            f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
 
-    _p(f"  校准 {len(calib)} 张（trainA），量化侧 NNCF FakeQuantize 模拟")
+    _p(f"  校准 {len(calib)} 张（{PAIR.calib_dir}），量化侧 NNCF FakeQuantize 模拟")
     images = load_images(paths)
-    report = layer_report(MODELS / "horse2zebra.pth", calib, images)
+    report = layer_report(PAIR.weights, calib, images)
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     (RESULTS / "layers.json").write_text(
@@ -859,8 +1023,8 @@ def cmd_layers(args):
 
 def cmd_figures(args):
     from core.figures import make_all
-    produced = make_all()
-    _p("实验图表已生成（issue #14）：")
+    produced = make_all(pair=PAIR)
+    _p(f"实验图表已生成（{PAIR.id}，issue #14）：")
     for p in produced:
         _p(f"  {p}")
 
@@ -900,26 +1064,31 @@ def main():
     ap = argparse.ArgumentParser(description="ShiftLite")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("setup", help="下载模型并完成转换与量化")
+    # 所有子命令共用 --pair：迁移对由 pairs/<id>.json 决定，不改代码即可换域
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--pair", default=DEFAULT_PAIR, choices=list_pairs(),
+                        help="迁移对（pairs/<id>.json）；默认 horse2zebra，沿用既有平铺路径")
+
+    s = sub.add_parser("setup", parents=[common], help="下载模型并完成转换与量化")
     s.add_argument("--force", action="store_true")
     s.add_argument("--subset", type=int, default=CALIB_SUBSET,
-                   help=f"校准集张数（方案口径 {CALIB_SUBSET} 张，取 trainA）")
+                   help=f"校准集张数（方案口径 {CALIB_SUBSET} 张，取 trainA/trainB）")
     s.add_argument("--accuracy-control", action="store_true",
                    help="启用精度控制量化（以部分加速收益换质量）")
     s.add_argument("--keep-instance-norm", action="store_true",
                    help="不排除 InstanceNorm/MVN；用于复现量化崩溃现象，勿用于正式产物")
     s.set_defaults(func=cmd_setup)
 
-    b = sub.add_parser("bench", help="A/B/C 三组性能对比")
+    b = sub.add_parser("bench", parents=[common], help="A/B/C 三组性能对比")
     # 12 轮计时 + 3 轮预热，丢弃计时首轮（与 README §五的口径一致）
     b.add_argument("--rounds", type=int, default=12)
     b.add_argument("--warmup", type=int, default=3)
     b.add_argument("--warmup-drop", type=int, default=1)
     b.set_defaults(func=cmd_bench)
 
-    q = sub.add_parser("quality", help="质量与结构保真度量")
+    q = sub.add_parser("quality", parents=[common], help="质量与结构保真度量")
     q.add_argument("--limit", type=int, default=4,
-                   help="参与评测的马图数量（方案 §4 正式口径为 testA 全量 120 张）")
+                   help="参与评测的输入图数量（方案 §4 正式口径为输入域全量）")
     q.add_argument("--deep", action="store_true",
                    help="接入真实感知指标（LPIPS/FID/KID/Canny/掩码/判别），"
                         "首次运行需下载预训练权重")
@@ -927,20 +1096,22 @@ def main():
                    help="ssim_bc 低于该值的样本登记为异常样例")
     q.set_defaults(func=cmd_quality)
 
-    ly = sub.add_parser("layers", help="E4 层间分工：逐层表示漂移分析")
+    ly = sub.add_parser("layers", parents=[common],
+                        help="E4 层间分工：逐层表示漂移分析")
     ly.add_argument("--subset", type=int, default=CALIB_SUBSET)
     ly.add_argument("--limit", type=int, default=6,
-                    help="参与评测的马图数量（取 eval/testA；方案 §4 正式口径为全量 120 张）")
+                    help="参与评测的输入图数量（取 eval/输入域；方案 §4 正式口径为全量）")
     ly.add_argument("--images", nargs="+", default=None,
                     help="显式指定评测图，覆盖 --limit")
     ly.set_defaults(func=cmd_layers)
 
-    v = sub.add_parser("serve", help="启动本地可视化界面")
+    v = sub.add_parser("serve", parents=[common], help="启动本地可视化界面")
     v.add_argument("--host", default="127.0.0.1")
     v.add_argument("--port", type=int, default=8770)
     v.set_defaults(func=cmd_serve)
 
-    fg = sub.add_parser("figures", help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
+    fg = sub.add_parser("figures", parents=[common],
+                        help="生成实验图表（E2 柱状图/E3 异常拼图/E4 层间曲线）")
     fg.set_defaults(func=cmd_figures)
 
     # AdaIN 支线（issue #32）：独立命令空间，明细见 stylize/README.md。
@@ -962,6 +1133,7 @@ def main():
 
     args = ap.parse_args()
     sys.path.insert(0, str(ROOT))
+    select_pair(args.pair)          # 先按 --pair 重绑路径，再执行子命令
     args.func(args)
 
 

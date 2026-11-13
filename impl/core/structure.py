@@ -78,7 +78,10 @@ def measure_structure(rows, images, detections):
             aggregates[name][metric] = {
                 'mean': round(float(np.mean(vals)), 6) if vals else None,
                 'n_valid': len(vals), 'n_total': n}
-    return {'protocol': PROTOCOL, 'pairs': aggregates, 'failures': failures,
+    # 标签随迁移对方向取（horse2zebra / zebra2horse 反向），不再写死。
+    labels = {side: detections[side][0].get('label') for side in ('X', 'A', 'B', 'C')}
+    protocol = {**PROTOCOL, 'labels': labels}
+    return {'protocol': protocol, 'pairs': aggregates, 'failures': failures,
             'n_failure_samples': len({f['sample'] for f in failures}),
             'review_queue': review, 'human_review_complete': False}
 

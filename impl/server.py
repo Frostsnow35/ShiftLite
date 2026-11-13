@@ -18,11 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 ART = ROOT / "artifacts"
-SAMPLES = ART / "samples"
-RESULTS = ART / "results"
-MODELS = ART / "models"
 UPLOADS = ART / "uploads"
-INFER_OUT = RESULTS / "inference"
 
 # AdaIN 支线（issue #32）：与主线口径隔离，产物只落 artifacts/adain/
 STYLIZE_DIR = ROOT / "stylize"
@@ -35,21 +31,53 @@ STY_OUT = STY_ART / "out"
 ALLOWED_PREFIX = ("web", "artifacts", "stylize")
 
 _runtime = None
+_runtime_pair = None
 _runtime_lock = threading.Lock()
 _infer_lock = threading.Lock()
+
+# 同时驻留的 Runtime 上限。实测每组 RSS 增量约 0.3–0.5 GB，
+# 四个 pair 全驻留会吃掉 1.5 GB 以上，所以只保留当前这一组，
+# 切 pair 时按需重编译（约 2–4 秒，仅切换时发生一次）。
+_MAX_RESIDENT = 1
 
 _sty_lock = threading.Lock()
 _sty_cache: dict = {}      # {"net": torch 模型, "ov": {标签: compiled}}
 
 
-def get_runtime():
-    global _runtime
+def _pair_registry():
+    from core.pairs import list_pairs, load_pair
+    out = {}
+    for pid in list_pairs():
+        try:
+            out[pid] = load_pair(pid)
+        except Exception:
+            continue
+    if not out:
+        from core.pairs import DEFAULT_PAIR
+        out = {DEFAULT_PAIR: load_pair(DEFAULT_PAIR)}
+    return out
+
+
+PAIRS = _pair_registry()
+
+
+def get_pair(pair_id: str | None = None):
+    from core.pairs import DEFAULT_PAIR
+    pid = pair_id or DEFAULT_PAIR
+    if pid not in PAIRS:
+        raise KeyError(f"未知迁移对：{pid}")
+    return PAIRS[pid]
+
+
+def get_runtime(pair_id: str | None = None):
+    global _runtime, _runtime_pair
+    pair = get_pair(pair_id)
     with _runtime_lock:
-        if _runtime is None:
-            from core.backends import Runtime
-            _runtime = Runtime(MODELS / "horse2zebra.pth",
-                               MODELS / "horse2zebra.xml",
-                               MODELS / "horse2zebra_int8.xml")
+        if _runtime is not None and _runtime_pair == pair.id:
+            return _runtime
+        from core.backends import Runtime
+        _runtime = Runtime(pair.weights, pair.xml, pair.int8_xml)
+        _runtime_pair = pair.id
         return _runtime
 
 
@@ -60,29 +88,35 @@ def _read_json(path: Path):
         return None
 
 
-def list_samples() -> list[dict]:
-    if not SAMPLES.exists():
+def list_samples(pair) -> list[dict]:
+    d = pair.paths.samples
+    if not d.exists():
         return []
     exts = {".jpg", ".jpeg", ".png", ".webp"}
     out = []
-    for p in sorted(SAMPLES.iterdir()):
+    for p in sorted(d.iterdir()):
         if p.suffix.lower() in exts and not p.name.startswith("_"):
             out.append({
                 "id": p.stem,
                 "name": p.stem.replace("_", " "),
-                "url": f"/artifacts/samples/{p.name}",
-                "kind": "zebra" if p.stem.startswith("zebra") else "horse",
+                "url": f"/{p.relative_to(ROOT).as_posix()}",
+                "kind": ("input" if p.stem.startswith(pair.input_prefix)
+                         else "ref" if p.stem.startswith(pair.ref_prefix)
+                         else "other"),
             })
     return out
 
 
-def build_state() -> dict:
-    rt = get_runtime()
+def build_state(pair_id: str | None = None) -> dict:
+    pair = get_pair(pair_id)
+    rt = get_runtime(pair.id)
     avail = rt.availability()
-    bench = _read_json(RESULTS / "benchmark.json")
-    quality = _read_json(RESULTS / "quality.json")
-    conv = _read_json(MODELS / "convert_report.json")
-    quant = _read_json(MODELS / "quantize_report.json")
+    results = pair.paths.results
+    models = pair.paths.models
+    bench = _read_json(results / "benchmark.json")
+    quality = _read_json(results / "quality.json")
+    conv = _read_json(models / "convert_report.json")
+    quant = _read_json(models / "quantize_report.json")
 
     groups_map = {g["id"]: g for g in (bench or {}).get("groups", [])}
     from core.backends import GROUP_LABEL
@@ -99,7 +133,7 @@ def build_state() -> dict:
             g["precision"] = "int8（未量化层保持 f32）"
         groups.append(g)
 
-    layers = _read_json(RESULTS / "layers.json")
+    layers = _read_json(results / "layers.json")
     experiments = _experiments(conv, quant, bench, quality, avail, layers=layers)
 
     return {
@@ -107,8 +141,25 @@ def build_state() -> dict:
         "device": (bench or {}).get("device", "-"),
         "platform": (bench or {}).get("platform", "-"),
         "protocol": (bench or {}).get("protocol"),
+        "pair": {
+            "id": pair.id,
+            "label": pair.label,
+            "type": pair.type,
+            "type_label": pair.type_label,
+            "input_prefix": pair.input_prefix,
+            "ref_prefix": pair.ref_prefix,
+            "input_dir": pair.input_dir,
+            "ref_dir": pair.ref_dir,
+            "metrics": pair.metrics,
+        },
+        "pairs": [
+            {"id": p.id, "label": p.label, "type": p.type,
+             "type_label": p.type_label,
+             "ready": (p.xml.exists() and p.int8_xml.exists())}
+            for p in PAIRS.values()
+        ],
         "groups": groups,
-        "samples": list_samples(),
+        "samples": list_samples(pair),
         "convert_report": conv,
         "quantize_report": quant,
         "quality": quality,
@@ -127,7 +178,7 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
-    deep_layer = layers if layers is not None else _read_json(RESULTS / "layers.json")
+    deep_layer = layers if layers is not None else _read_json(ART / "results" / "layers.json")
     quality = quality or {}
     q_deep = quality.get("deep") or {}
     q_real = quality.get("metrics_source") == "real"
@@ -369,8 +420,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_file(WEB / "index.html")
 
         if path == "/api/state":
+            q = urllib.parse.parse_qs(parsed.query)
+            pid = (q.get("pair") or [None])[0]
             try:
-                return self._json({"ok": True, "state": build_state()})
+                return self._json({"ok": True, "state": build_state(pid)})
+            except KeyError as e:
+                return self._err(404, str(e).strip("'\""))
             except Exception as e:
                 return self._err(500, f"状态构建失败：{e}")
 
@@ -429,13 +484,19 @@ class Handler(BaseHTTPRequestHandler):
         sample = str(req.get("sample", "")).strip()
         group = str(req.get("group", "A")).upper()
         source = req.get("source") or "samples"
+        pair_id = req.get("pair") or None
 
         if group not in ("A", "B", "C"):
             return self._err(400, "group 只能是 A / B / C")
         if not re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", sample):
             return self._err(400, "sample 参数非法")
 
-        base = UPLOADS if source == "uploads" else SAMPLES
+        try:
+            pair = get_pair(pair_id)
+        except KeyError as e:
+            return self._err(400, str(e).strip("'\""))
+
+        base = UPLOADS if source == "uploads" else pair.paths.samples
         img_path = base / f"{sample}.png"
         if not img_path.exists():
             for ext in (".jpg", ".jpeg", ".webp"):
@@ -445,9 +506,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self._err(404, "找不到输入图")
 
-        rt = get_runtime()
+        rt = get_runtime(pair.id)
         if not rt.availability().get(group):
-            return self._err(409, f"{group} 组模型尚未生成")
+            return self._err(409, f"{group} 组模型尚未生成（{pair.label}）")
 
         from core.utils import load_image, to_tensor, to_image
 
@@ -463,13 +524,15 @@ class Handler(BaseHTTPRequestHandler):
                 ms = (time.perf_counter() - t0) * 1000
                 result = to_image(out)
 
-            INFER_OUT.mkdir(parents=True, exist_ok=True)
-            dst = INFER_OUT / f"{sample}_{group}.png"
+            infer_out = pair.paths.results / "inference"
+            infer_out.mkdir(parents=True, exist_ok=True)
+            dst = infer_out / f"{sample}_{group}.png"
             result.save(dst)
             ts = int(time.time() * 1000)
 
             return self._json({
                 "ok": True,
+                "pair": pair.id,
                 "group": group,
                 "latency_ms": round(ms, 2),
                 "fps": round(1000 / ms, 2) if ms else 0,
