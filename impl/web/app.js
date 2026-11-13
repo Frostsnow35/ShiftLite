@@ -1320,9 +1320,9 @@ function renderQualityTable(q) {
     const tr = el('tr', {}, [
       el('td', { text: r.sample + (r.ssim_bc != null && r.ssim_bc < threshold ? ' ·异常' : '') }),
       el('td', { text: r.ssim_ab != null ? fmt(r.ssim_ab, 4) : '—' }),
-      el('td', { text: r.canny_edge_ssim_ab != null ? fmt(r.canny_edge_ssim_ab, 4) : '—' }),
+      el('td', { text: fmt(r.canny_edge_ssim_ab ?? r.edge_ssim_ab, 4) }),
       el('td', { text: r.ssim_bc != null ? fmt(r.ssim_bc, 4) : '—' }),
-      el('td', { text: r.canny_edge_ssim_bc != null ? fmt(r.canny_edge_ssim_bc, 4) : '—' }),
+      el('td', { text: fmt(r.canny_edge_ssim_bc ?? r.edge_ssim_bc, 4) }),
       el('td', { text: r.psnr_bc != null ? fmt(r.psnr_bc, 2) : '—' }),
       el('td', { text: r.mask_iou_ac != null ? fmt(r.mask_iou_ac, 3) : '—' }),
       el('td', { text: fmt(r.mask_dice_ac, 3) }),

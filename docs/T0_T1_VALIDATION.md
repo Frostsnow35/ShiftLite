@@ -29,11 +29,11 @@
 
 使用现有已验证的 Python 3.12.4 CPU 环境，torch 2.14.1+cpu / torchvision 0.29.1+cpu / OpenVINO 2026.4.1 / NNCF 3.4.0；机器 Ryzen 9 7940HX、Windows 11。没有从零重装 Python 环境，没有验证伙伴机器或 Linux/macOS，也没有重复 Nov9 全量质量与 E4。
 
-原有 10 张第一轮人工观察已记录，7 条 reviewed、3 条 needs_discussion，署名按要求为空；其余 85 张未查看。尚无人工代码审查记录。复核与统计局限见 [人工归档](experiments/2026-11-09-7940HX/README.md)。附件已在本地准备，尚未上传，提交者需提供可访问入口。
+原有 10 张第一轮人工观察已记录，7 条 reviewed、3 条 needs_discussion，署名按要求为空；其余 85 张未查看。尚无人工代码审查记录。复核与统计局限见 [人工归档](experiments/2026-11-09-7940HX/README.md)。原图不随仓库交付，也不要求上传；复核按 [归档说明](experiments/2026-11-09-7940HX/README.md) 用图片 SHA-256 与本地重建完成。
 
 ## 提交前仍需人工决定
 
 - 小组是否接受第 1、4、7 张的不可判定事项作为最终记录，是否需要第二人补看。
 - 是否补看新增 6 张失败，以及更大多实例队列；本轮不扩大人工结论。
 - 复核责任标识与代码审查安排。
-- 实际 PR 编号及附件入口；按 AGENTS.md 生成正式 reviews/PR-<编号>.html，草稿见 [reviewer 说明](reviews/t0-t1-reviewer-draft.html)。
+- 正式编号说明已随 PR 提交（[reviews/PR-31.html](../reviews/PR-31.html)）；待完成的是人工代码审查与第二人独立图片复核。

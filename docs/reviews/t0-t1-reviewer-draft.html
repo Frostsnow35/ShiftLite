@@ -1,43 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>T0/T1 AI reviewer 说明草稿 / Reviewer note draft</title>
-<style>body{font-family:system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.7}h2{border-bottom:1px solid #ddd}.en{color:#555}code{background:#eee;padding:.1rem .3rem}</style></head>
+<head><meta charset="utf-8"><title>已归档 / Archived</title></head>
 <body>
-<h1>T0/T1 AI 审阅说明草稿 / AI Reviewer Note Draft</h1>
-<p>日期：2026-11-11。尚未创建 PR；本文件是完整内容草稿，不代替 AGENTS.md 要求的正式编号文件。
-取得 PR 编号后，复制到 <code>reviews/PR-&lt;编号&gt;.html</code> 并核实最终改动与测试，再随 PR 提交。</p>
-<p class="en">Date: 2026-11-11. No PR has been created. This draft does not replace the numbered note required by AGENTS.md.
-After obtaining a PR number, copy it to the required path, verify the final scope and tests, and include it in the PR.</p>
-<h2>一、概述 / Summary</h2>
-<p>针对 #20，补全 Dice、失败记录及输入/输出结构比较，修正分类器预处理与逐图 Canny 展示；补齐可移植启动、离线复核材料导出、复现指南和原有 10 张人工意见归档。</p>
-<p class="en">For issue #20, this work adds Dice, detection-failure records and input/output structure comparisons, corrects classifier preprocessing and per-image Canny display, and provides portable startup, offline review exports, reproduction instructions and the original ten samples' human observations.</p>
-<h2>二、变更内容 / Changes</h2>
-<p>计算和 CLI 位于 impl/core 与 impl/cli.py；页面位于 impl/web；启动脚本为 impl/run-local.ps1；测试位于 impl/tests；通用指南为 docs/REPRODUCING_T0_T1.md，实验及人工记录位于 docs/experiments/2026-11-09-7940HX。</p>
-<p class="en">Computation and CLI changes are in impl/core and impl/cli.py, UI changes in impl/web, the launcher in impl/run-local.ps1 and tests in impl/tests. The reproduction guide and experiment/human records are under docs.</p>
-<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
-<p>工具：Codex。本轮模型为 gpt-6.1-sol；早期实现轮次的具体模型标识未记录。
-AI 参与代码实现、自动验证、材料展示、记录整理及文稿撰写。人工视觉结论由用户在对话中逐张给出，AI 不代填视觉判断。</p>
-<p>人工已查看原有 10 张，7 条 reviewed、3 条 needs_discussion；按用户要求署名留空。另 85 张风险候选未查看，其中包含 6 张新增检测失败。尚无人类代码审查或第二人独立图片复核的记录。</p>
-<p class="en">Tool: Codex. The current round used gpt-6.1-sol; exact model identifiers for earlier rounds were not recorded.
-AI assisted implementation, automated validation, presentation of review images, transcription and documentation.
-The user supplied the visual judgments: ten original samples were observed, seven are reviewed and three need discussion, with signatures left blank at the user's request.
-The remaining 85 candidates, including six additional detection-failure samples, have not been reviewed. Human code review and a second independent image review have not been recorded.</p>
-<h2>四、验证与测试 / Verification &amp; Testing</h2>
-<ul>
-<li>11 个 Python unittest、Node 前端字段测试、JavaScript 语法及 git diff --check 通过。
-<span class="en">Eleven Python unit tests, the Node UI contract test, JavaScript syntax checking and git diff --check passed.</span></li>
-<li>2026-11-11 独立运行目录从无 IR/结果状态重建：只复用校验后的官方权重、数据 ZIP 与感知权重缓存；使用已有 Python 环境。
-转换误差均值 0.0001、最大 0.0012 灰度级；校准 300、数据 testA 120/testB 140；A/B/C bench 与 4 张 deep 联调通过，real 且 errors=[]。
-<span class="en">A fresh runtime directory rebuilt IR and results using verified download caches and the existing Python environment. Conversion error was 0.0001 mean and 0.0012 maximum gray levels. Calibration used 300 images; the prepared test sets contained 120/140 images. All three benchmarks and a four-image deep smoke run passed with real metrics and no module errors.</span></li>
-<li>正式 120/140 张质量及 120 张层分析来自 2026-11-09；本轮没有重跑全量，也没有宣称从零重建了 Python 环境。
-<span class="en">The full 120/140 quality evaluation and 120-image layer analysis are from November 9. This handoff round did not repeat them or rebuild the Python environment from scratch.</span></li>
-<li>原有 10 张离线导出已验证顺序、质量文件/图片哈希和全 pending 模板；重新导出保护已有人工 CSV，拒绝混合其他实验或变更后的图片。
-<span class="en">The ten-sample offline export was checked for order, quality/image hashes and pending templates. Re-export preserves existing human work and rejects other experiments or changed image sources.</span></li>
-</ul>
-<p>命令与预期输出见通用复现指南；本机完整日志另行交付。图片附件尚未上传，提交者需提供稳定可访问入口。
-<span class="en">Commands and expected outputs are in the reproduction guide. Full local logs are delivered separately. The image attachment has not been uploaded; the submitter must provide an accessible location.</span></p>
-<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
-<p>检测掩码不是真值；最高置信度不保证跨图同一主体。缺失保留 null；有条纹不等于迁移成功，检测失败不等于生成畸形。人工意见仅适用于附件哈希对应的原图，不能复制到重跑输出。背景 v2 与旧填充算法、分类器新旧预处理不可混用。FID/KID 保留历史特征实现，不用于跨论文标准 FID 比较。性能仅代表特定平台与负载。</p>
-<p class="en">Detector masks are proxies, and highest-confidence selection does not prove instance correspondence. Missing values remain null. Stripes do not establish successful translation, and detection failure does not establish malformed generation. Human observations are bound to the archived image hashes. Background protocols and classifier preprocessing versions must not be mixed. Legacy FID/KID features are retained and are not directly comparable to standard paper benchmarks. Performance is platform- and workload-dependent.</p>
-</body></html>
+<p>本文件曾是 PR 说明的编写稿，现已由正式编号文件取代：<a href="../../reviews/PR-31.html">reviews/PR-31.html</a>。</p>
+<p>图片复核方式见 <a href="../experiments/2026-11-09-7940HX/README.md">7940HX 归档说明</a>：原图不随仓库交付，按 SHA-256 清单与本地重建核对。</p>
+<p class="en">This file has been superseded by the numbered reviewer note at <code>reviews/PR-31.html</code>. Original images are hash-bound and regenerated locally rather than shipped.</p>
+</body>
+</html>

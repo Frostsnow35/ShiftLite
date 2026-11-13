@@ -23,13 +23,13 @@
 | 新增 | [docs/experiments/2026-11-09-7940HX/README.md](../docs/experiments/2026-11-09-7940HX/README.md) | 检测失败/异常人工结论归档入口与附件说明 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/human_review.csv](../docs/experiments/2026-11-09-7940HX/human_review.csv) | 原有 10 张实际人工意见，签名留空，7 reviewed/3 needs_discussion |
 | 新增 | [docs/experiments/2026-11-09-7940HX/human_review_summary.md](../docs/experiments/2026-11-09-7940HX/human_review_summary.md) | 逐张汇总、共同发现、待讨论与范围限制 |
-| 新增 | [docs/experiments/2026-11-09-7940HX/image-manifest.json](../docs/experiments/2026-11-09-7940HX/image-manifest.json) | 同批次图片 SHA-256、质量 JSON SHA-256 与附件名 |
+| 新增 | [docs/experiments/2026-11-09-7940HX/image-manifest.json](../docs/experiments/2026-11-09-7940HX/image-manifest.json) | 10 张对照图与质量 JSON 的 SHA-256，供本地重建后核验 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/legacy_detections.json](../docs/experiments/2026-11-09-7940HX/legacy_detections.json) | 原有 10 张的检测侧、类别、置信度及缺失信息 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/legacy_samples.json](../docs/experiments/2026-11-09-7940HX/legacy_samples.json) | 原有 10 张固定导出顺序 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/metrics-summary.json](../docs/experiments/2026-11-09-7940HX/metrics-summary.json) | 本机环境、模型/源码/质量哈希与原始指标摘要 |
-| 新增 | [docs/experiments/2026-11-09-7940HX/quality_table.md](../docs/experiments/2026-11-09-7940HX/quality_table.md) | Nov9 原指标生成的主表，补 Dice 展示 |
+| 新增 | [docs/experiments/2026-11-09-7940HX/quality_table.md](../docs/experiments/2026-11-09-7940HX/quality_table.md) | 7940HX 本机质量表（非项目主表），补 Dice 展示 |
 | 新增 | [docs/experiments/2026-11-09-7940HX/structure_table_v2.md](../docs/experiments/2026-11-09-7940HX/structure_table_v2.md) | 输入/输出结构指标及有效分母表 |
-| 新增 | [docs/reviews/t0-t1-reviewer-draft.html](../docs/reviews/t0-t1-reviewer-draft.html) | 完整双语披露草稿；取得 PR 编号后复制到正式路径 |
+| 新增 | [docs/reviews/t0-t1-reviewer-draft.html](../docs/reviews/t0-t1-reviewer-draft.html) | 历史编写稿，已指向正式编号说明 [reviews/PR-31.html](../reviews/PR-31.html) |
 | 新增 | [impl/core/review.py](../impl/core/review.py) | 离线导出清单、图片哈希、模板与失败表，保护既有人工作品 |
 | 新增 | [impl/tests/test_quality_table.py](../impl/tests/test_quality_table.py) | 验证 Dice 主表与旧 JSON 缺失语义 |
 | 新增 | [impl/tests/test_review_materials.py](../impl/tests/test_review_materials.py) | 验证顺序/哈希/人工表保护/跨实验拒绝/无掩码降级 |
@@ -38,12 +38,12 @@
 
 包括 impl/.gitignore、README、cli.py、core/metrics.py、metrics_deep.py、structure.py、figures.py、web/app.js、index.html、依赖锁、run-local.ps1 和原有三份测试。README/CLI/figures/启动脚本本轮又有增量，需一并纳入下一次提交。
 
-## 另附材料，不强制加入 Git
+## 本机留档材料，不作为交付物
 
 | 材料 | 交付方式 | 当前状态 |
 |---|---|---|
-| ShiftLite_原有10张人工复核材料_2026-11-11.zip | 团队共享/PR 附件，提供可访问入口 | 已生成并检查图片哈希和 ZIP CRC，尚未上传 |
-| 附件SHA256.txt | 与 ZIP 一起交付 | 已生成 |
+| ShiftLite_原有10张人工复核材料_2026-11-11.zip | 提交者本机留档，不随仓库交付、不要求上传 | 已生成并检查图片哈希和 ZIP CRC；复核改用 SHA-256 清单与本地重建 |
+| 附件SHA256.txt | 与 ZIP 一起本地留档 | 已生成 |
 | 本轮 clean-run-status.json、测试日志和最终核验 JSON | 按需附于评审材料 | 本地保存，不是运行依赖 |
 
 ## 仅本地保留
@@ -55,12 +55,12 @@
 | 全量生成 PNG、旧实验备份、安装日志、重复源码快照 | 研究证据可本地/团队归档，无需全部加入代码仓库 |
 | 开题报告与课程文稿 | 项目约定为本地交付物 |
 
-## 提交者还需做的事
+## 复核与后续
 
 1. 人工审查代码和 [验证范围](T0_T1_VALIDATION.md)，确认实际认领范围。
-2. 将图片 ZIP 与 SHA256 文件交给伙伴，并补充稳定附件入口。仓库 README 中目前只有待上传说明，尚无远端下载地址。
+2. 原图不随仓库交付，也不要求上传 ZIP；复核按 [归档说明](experiments/2026-11-09-7940HX/README.md) 用 SHA-256 清单与本地重建完成。
 3. 如实说明 10 张第一轮已看、3 张有待议项、署名为空、其余 85 张未看；是否处理新增 6 张失败由小组确定。
-4. 取得真实 PR 编号后，把 [双语说明草稿](reviews/t0-t1-reviewer-draft.html) 复制为 reviews/PR-<编号>.html，核对内容并随 PR 提交。草稿不能替代正式编号文件。
+4. 正式编号说明为 [reviews/PR-31.html](../reviews/PR-31.html)，按 AGENTS.md 随 PR 提交。
 5. 不把 #20 自动写为已关闭；讨论项和人工代码审查尚未完成。
 
 本表不包含 git add/commit/push 的自动执行，也未触发 GitHub 评论或状态修改。

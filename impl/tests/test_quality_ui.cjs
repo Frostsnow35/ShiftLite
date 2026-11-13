@@ -26,5 +26,6 @@ assert.equal(cells[4].text, '0.2222');
 assert.equal(cells[7].text, '0.500');
 assert.equal(cells[8].text, '0.200');
 assert.equal(cells[10].text, '—');
-assert.equal(render({ sample: 'old', edge_ssim_ab: .9999 })[2].text, '—');
+assert.equal(render({ sample: 'old', edge_ssim_ab: .9999 })[2].text, '0.9999');
+assert.equal(render({ sample: 'old', edge_ssim_bc: .8888 })[4].text, '0.8888');
 console.log('PASS: Canny bindings, Dice/input bindings, missing values, legacy JSON fallback');

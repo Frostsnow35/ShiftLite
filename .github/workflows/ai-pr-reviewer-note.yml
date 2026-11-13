@@ -5,6 +5,11 @@ name: AI PR Reviewer Note Check
 # main 分支保护要求本检查（ai-pr-reviewer-note）通过才准合并。
 # 判定「AI 参与」的条件：PR 模板勾选「AI 参与」 或 已附 reviews/PR-<编号>.html（二者其一）；
 # 不强制人类手动勾选——AI Agent 按 AGENTS.md 自动产出说明即触发校验。
+#
+# 触发器保留 pull_request：pull_request_target 的 workflow 只从 base 默认分支读取，
+# 在 PR 分支里换成它，本 PR 自身反而不会触发检查，必检项会一直挂着。
+# 迁移 pull_request_target 需要在 main 上单独合入，属后续维护项。
+# fork PR 的 GITHUB_TOKEN 只读，写评论必定失败，因此评论失败不判检查失败。
 
 on:
   pull_request:
@@ -30,15 +35,18 @@ jobs:
         run: |
           set -euo pipefail
 
+          STAMP="<!-- ai-note-check:${HEAD_SHA} -->"
           post_comment () {
             local body="$1"
-            # 去重：已存在含哨兵的评论则跳过，避免每次推送重复留言
-            if gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" 2>/dev/null \
-               | grep -qF '<!-- ai-note-check -->'; then
-              echo "::notice::已有校验评论，跳过重复留言。"
+            # 同一个 head sha 只留一条评论；评论写失败不能影响检查结论
+            if gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate 2>/dev/null \
+               | grep -qF "$STAMP"; then
+              echo "::notice::该 head sha 已有校验评论，跳过重复留言。"
               return 0
             fi
-            printf '%s\n<!-- ai-note-check -->\n' "$body" | gh pr comment "${PR_NUMBER}" -R "${REPO}" --body-file -
+            printf '%s\n%s\n' "$body" "$STAMP" \
+              | gh pr comment "${PR_NUMBER}" -R "${REPO}" --body-file - >/dev/null 2>&1 \
+              || echo "::warning::发布校验评论失败，不影响本检查结果。"
           }
 
           NOTE_PATH="reviews/PR-${PR_NUMBER}.html"
@@ -81,6 +89,16 @@ jobs:
             body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g")"
             post_comment "$body"
             echo "::error::双语结构不完整，合并被阻止。"
+            exit 1
+          fi
+
+          # 4) 拒绝把未改写的编写稿直接复制到编号路径（编号文件必须是正式说明）
+          draft_marker=$(printf '%s' "$html" | grep -oiE 'reviewer note draft|审阅说明草稿|尚未创建 ?PR|不代替 AGENTS\.md|不替代 AGENTS\.md' | head -1 || true)
+          if [ -n "$draft_marker" ]; then
+            body=$'❌ **编号说明仍是编写稿 / Numbered note is still a draft**\n\n`reviews/PR-__PRNUM__.html` 中含有编写稿占位语句（__MARKER__）。请按模板 `docs/reviewer-note.template.html` 填写正式说明：写明 PR 编号、作者、日期、AI 工具与模型、参与范围、人工复核、验证与测试、已知问题，并删除编写稿声明。\n\nEnglish: The numbered note still contains draft placeholder text. Fill in the template with the PR number, author, date, AI tool/model, scope, human review, verification and known issues, and remove the draft disclaimer.'
+            body="$(printf '%s' "$body" | sed "s/__PRNUM__/${PR_NUMBER}/g; s/__MARKER__/${draft_marker}/g")"
+            post_comment "$body"
+            echo "::error::${NOTE_PATH} 仍是编写稿，未填写正式编号说明。"
             exit 1
           fi
 

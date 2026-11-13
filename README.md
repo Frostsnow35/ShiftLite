@@ -31,7 +31,7 @@
 - [PLAN.md](./docs/PLAN.md) —— 完整实施方案（定位 / 数据 / 技术路线 / 指标 / 分工 / 时间表 / 文献 / 实验 / 风险）
 - 开题报告为本地交付物，不入库
 - [T0/T1 复现指南](./docs/REPRODUCING_T0_T1.md) —— 环境、独立运行、评测与人工材料交接
-- [T0/T1 实验与人工复核归档](./docs/experiments/2026-11-09-7940HX/README.md) —— 本机结果来源及原有 10 张复核记录
+- [T0/T1 本机复现归档（AMD 7940HX，非项目主表）](./docs/experiments/2026-11-09-7940HX/README.md) —— 本机结果来源及原有 10 张复核记录；项目主表为 `impl/artifacts/results/quality.json`
 
 ## 目录
 ```
