@@ -37,8 +37,11 @@ class Paths:
     models: Path
     samples: Path
     calib: Path
-    eval_a: Path
-    eval_b: Path
+    # 评测集按「角色」命名，不按 zip 里的 testA/testB 命名。
+    # 原因：zebra2horse / style_monet 的输入域来自 zip 的 testB，
+    # 若目录仍叫 testA 就会出现「testA 里装着斑马」这种自相矛盾。
+    eval_in: Path      # 生成批输入（pair.input_dir）
+    eval_ref: Path     # FID/KID 参照批（pair.ref_dir）
     results: Path
 
 
@@ -98,8 +101,8 @@ def _paths(pair_id: str, ckpt_file: str) -> Paths:
             models=ART / "models",
             samples=ART / "samples",
             calib=ART / "calib",
-            eval_a=ART / "eval" / "testA",
-            eval_b=ART / "eval" / "testB",
+            eval_in=ART / "eval" / "input",
+            eval_ref=ART / "eval" / "ref",
             results=ART / "results",
         )
     base = ART / pair_id
@@ -107,8 +110,8 @@ def _paths(pair_id: str, ckpt_file: str) -> Paths:
         models=base / "models",
         samples=base / "samples",
         calib=base / "calib",
-        eval_a=base / "eval" / "testA",
-        eval_b=base / "eval" / "testB",
+        eval_in=base / "eval" / "input",
+        eval_ref=base / "eval" / "ref",
         results=base / "results",
     )
 

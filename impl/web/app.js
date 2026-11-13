@@ -14,10 +14,20 @@ const C_TEXT = '#6d737d';
 const C_INK = '#14161a';
 
 let STATE = null;
+let PAIR = null;          // 当前迁移对 id，null 表示用服务端默认
 let SEL = { sample: null, source: 'samples', group: 'A', mode: 'side' };
 let TOOL = { loupe: false, grid: false };
 let HISTORY = [];
 let TIMER = null;
+
+function currentPairId() {
+  return PAIR || (STATE && STATE.pair && STATE.pair.id) || '';
+}
+
+function apiStateUrl() {
+  const pid = currentPairId();
+  return pid ? `/api/state?pair=${encodeURIComponent(pid)}` : '/api/state';
+}
 
 /* ══════════ 工具 ══════════ */
 
@@ -266,16 +276,21 @@ async function init() {
   bindRun();
   bindInfoNotes();
   bindLayerTools();
+  bindPairSelect();
   HISTORY = loadHistory();
   renderHistory();
 
   window.addEventListener('resize', moveIndicator);
 
+  const q0 = new URLSearchParams(location.search);
+  if (q0.get('pair')) PAIR = q0.get('pair');
+
   try {
-    const r = await fetch('/api/state');
+    const r = await fetch(apiStateUrl());
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || '未知错误');
     STATE = j.state;
+    PAIR = STATE.pair.id;
     render();
     setStatus('ok', '服务正常');
     moveIndicator();
@@ -300,6 +315,74 @@ async function init() {
   $('footTime').textContent = new Date().toLocaleString('zh-CN');
 }
 
+/* 迁移对切换：换 pair = 换权重 + 换数据集 + 换评测口径，
+   整页数据都要重取，不能只改标题。 */
+function bindPairSelect() {
+  const sel = $('pairSelect');
+  sel.addEventListener('change', async () => {
+    const pid = sel.value;
+    if (pid === currentPairId()) return;
+    PAIR = pid;
+    sel.disabled = true;
+    setStatus('', '切换中');
+    setNote('');
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('pair', pid);
+      url.searchParams.delete('sample');
+      history.replaceState(null, '', url);
+      const r = await fetch(apiStateUrl());
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || '切换失败');
+      STATE = j.state;
+      SEL.sample = null;
+      SEL.source = 'samples';
+      resetViewer();
+      render();
+      setStatus('ok', '服务正常');
+      moveIndicator();
+    } catch (e) {
+      setStatus('bad', '切换失败');
+      setNote(String(e.message || e), true);
+    } finally {
+      sel.disabled = false;
+    }
+  });
+}
+
+function renderPairPicker() {
+  const sel = $('pairSelect');
+  const pairs = STATE.pairs || [];
+  const cur = STATE.pair.id;
+  sel.innerHTML = '';
+  for (const p of pairs) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.ready ? p.label : `${p.label}（未就绪）`;
+    if (p.id === cur) o.selected = true;
+    sel.append(o);
+  }
+  sel.value = cur;
+  const chip = $('pairTypeChip');
+  chip.hidden = false;
+  chip.textContent = STATE.pair.type_label;
+}
+
+function resetViewer() {
+  const stage = $('stage');
+  if (stage) stage.dataset.has = '0';
+  for (const id of ['imgIn', 'imgOut', 'slideIn', 'slideOut']) {
+    const img = $(id);
+    if (img) img.removeAttribute('src');
+  }
+  for (const id of ['lmLatency', 'lmFps', 'lmGroup', 'lmSize']) {
+    const n = $(id);
+    if (n) n.textContent = '—';
+  }
+  setBadge('等待运行');
+  $('capOut').textContent = '输出';
+}
+
 function setStatus(kind, text) {
   const chip = $('statusChip');
   chip.className = 'chip ' + (kind === 'ok' ? 'is-ok' : kind === 'bad' ? 'is-bad' : '');
@@ -309,6 +392,7 @@ function setStatus(kind, text) {
 function render() {
   const s = STATE;
   $('deviceChip').textContent = s.device && s.device !== '-' ? s.device : '未采集设备信息';
+  renderPairPicker();
   renderSamples();
   renderGroups();
   renderKpis();
@@ -559,7 +643,9 @@ function renderSamples() {
       onclick: () => selectSample(s.id, 'samples'),
     }, [
       el('img', { src: s.url, alt: s.name, loading: 'lazy' }),
-      s.kind === 'zebra' ? el('span', { class: 'tag', text: 'zebra' }) : null,
+      s.kind === 'ref'
+        ? el('span', { class: 'tag', text: '参照' })
+        : null,
     ]));
   });
 }
@@ -730,7 +816,12 @@ async function runInference() {
     const r = await fetch('/api/infer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sample: SEL.sample, group: SEL.group, source: SEL.source }),
+      body: JSON.stringify({
+        sample: SEL.sample,
+        group: SEL.group,
+        source: SEL.source,
+        pair: currentPairId(),
+      }),
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || '推理失败');
@@ -1064,6 +1155,13 @@ function renderDeepTiles(q, d, real, m) {
     el('span', { class: 'tile__sub', text: sub }),
   ]));
 
+  // 指标可用性由迁移对声明（pairs/<id>.json 的 metrics 字段），
+  // 不适用的指标如实标注原因，不用通用替代值硬凑数字。
+  const pm = (STATE.pair && STATE.pair.metrics) || {};
+  const off = (k) => !!(pm[k] && typeof pm[k] === 'object' && pm[k].enabled === false);
+  const why = (k) => (pm[k] && pm[k].reason) || '不适用于当前迁移对';
+  const refName = (STATE.pair && STATE.pair.ref_prefix) || '目标域';
+
   put('样本量', `${q.n_samples}`, `生成批 · 生成于 ${esc(q.generated_at || '—')}`, true);
   put('PSNR (b,c)', fmt(m.psnr_bc, 2), 'dB · 越高越好');
 
@@ -1083,33 +1181,40 @@ function renderDeepTiles(q, d, real, m) {
     put('KID · B 批', fmt(kb.mean, 4), `± ${fmt(kb.std, 4)} · subset ${kb.subset_size}×${kb.n_subsets}`);
     put('KID · C 批', fmt(kc.mean, 4), `± ${fmt(kc.std, 4)}`);
   }
-  if (d.mask) {
-    put('输出一致性 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples} · 检测器估计`);
-    put('输出一致性 Dice (a,c)', fmt(d.mask.mean_dice_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples}`);
-    put('旧背景 SSIM (a,c)', fmt(d.mask.mean_background_ssim_ac, 3), '旧填充算法，仅作历史对照');
-  }
-  if (d.structure) {
-    for (const key of ['x_a', 'x_b', 'x_c', 'a_c']) {
-      const pair = d.structure.pairs[key];
-      for (const [metric, label] of [['iou', 'IoU'], ['dice', 'Dice'], ['background_ssim', '共同背景 SSIM']]) {
-        const item = pair[metric];
-        put(`${key.startsWith('x') ? '输入保真' : '输出一致性'} ${key} · ${label}`,
-          fmt(item.mean, 3), `有效 ${item.n_valid}/${item.n_total} · v2`);
+  if (off('mask_iou')) {
+    put('掩码 IoU', '不适用', why('mask_iou'));
+    put('结构评测 v2 / 人工待复核', '不适用', why('mask_iou'));
+  } else {
+    if (d.mask) {
+      put('输出一致性 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples} · 检测器估计`);
+      put('输出一致性 Dice (a,c)', fmt(d.mask.mean_dice_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples}`);
+      put('旧背景 SSIM (a,c)', fmt(d.mask.mean_background_ssim_ac, 3), '旧填充算法，仅作历史对照');
+    }
+    if (d.structure) {
+      for (const key of ['x_a', 'x_b', 'x_c', 'a_c']) {
+        const pair = d.structure.pairs[key];
+        for (const [metric, label] of [['iou', 'IoU'], ['dice', 'Dice'], ['background_ssim', '共同背景 SSIM']]) {
+          const item = pair[metric];
+          put(`${key.startsWith('x') ? '输入保真' : '输出一致性'} ${key} · ${label}`,
+            fmt(item.mean, 3), `有效 ${item.n_valid}/${item.n_total} · v2`);
+        }
       }
+      put('检测失败样本', `${d.structure.n_failure_samples}`, '检测失败不等于畸形；人工复核待完成');
+      for (const key of ['xa', 'xb', 'xc']) {
+        put(`输入 Canny (${key})`, fmt(d[`canny_edge_ssim_${key}`], 4),
+          `有效 ${d.canny_n_valid?.[key] ?? '—'}/${q.n_samples} · 条纹也会产生边缘`);
+      }
+      box.append(el('a', { href: '/artifacts/results/structure_review/review_queue.json',
+        text: '查看人工待复核清单（对照图在同目录）', target: '_blank', rel: 'noopener' }));
     }
-    put('检测失败样本', `${d.structure.n_failure_samples}`, '检测失败不等于畸形；人工复核待完成');
-    for (const key of ['xa', 'xb', 'xc']) {
-      put(`输入 Canny (${key})`, fmt(d[`canny_edge_ssim_${key}`], 4),
-        `有效 ${d.canny_n_valid?.[key] ?? '—'}/${q.n_samples} · 条纹也会产生边缘`);
-    }
-    box.append(el('a', { href: '/artifacts/results/structure_review/review_queue.json',
-      text: '查看人工待复核清单（对照图在同目录）', target: '_blank', rel: 'noopener' }));
   }
-  if (d.zebra_discrimination) {
+  if (off('class_discrimination')) {
+    put('任务判别', '不适用', why('class_discrimination'));
+  } else if (d.zebra_discrimination) {
     const zb = d.zebra_discrimination.b || {};
     const zc = d.zebra_discrimination.c || {};
-    put('斑马判别 · B 批', pctv(zb.top1_accuracy, 2), `n=${zb.n} · ResNet-50 top1`, true);
-    put('斑马判别 · C 批', pctv(zc.top1_accuracy, 2), `n=${zc.n} · 量化前后应接近`);
+    put(`判别 · B 批（${refName}）`, pctv(zb.top1_accuracy, 2), `n=${zb.n} · ResNet-50 top1`, true);
+    put(`判别 · C 批（${refName}）`, pctv(zc.top1_accuracy, 2), `n=${zc.n} · 量化前后应接近`);
   }
   if (d.anomalies) {
     put('异常登记', `${d.anomalies.count}`, `阈值 ssim(b,c) < ${d.anomalies.threshold}`);

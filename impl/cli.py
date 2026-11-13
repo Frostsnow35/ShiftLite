@@ -55,8 +55,8 @@ SAMPLES = PAIR.paths.samples
 CALIB = PAIR.paths.calib
 RESULTS = PAIR.paths.results
 EVAL = ART / "eval"
-EVAL_A = PAIR.paths.eval_a
-EVAL_B = PAIR.paths.eval_b
+EVAL_IN = PAIR.paths.eval_in
+EVAL_REF = PAIR.paths.eval_ref
 MODEL_BYTES = PAIR.ckpt_bytes
 
 
@@ -88,7 +88,7 @@ def select_pair(pair_id: str = DEFAULT_PAIR) -> None:
     用模块级全局是为了让既有函数签名保持不动（它们都直接读 MODELS/SAMPLES/…）。
     CLI 是单次进程、子命令互斥，这么做不会有并发问题。
     """
-    global PAIR, MODELS, SAMPLES, CALIB, RESULTS, EVAL_A, EVAL_B
+    global PAIR, MODELS, SAMPLES, CALIB, RESULTS, EVAL_IN, EVAL_REF
     global MODEL_BYTES, DATASET_SOURCES
     p = load_pair(pair_id)
     PAIR = p
@@ -96,8 +96,8 @@ def select_pair(pair_id: str = DEFAULT_PAIR) -> None:
     SAMPLES = p.paths.samples
     CALIB = p.paths.calib
     RESULTS = p.paths.results
-    EVAL_A = p.paths.eval_a
-    EVAL_B = p.paths.eval_b
+    EVAL_IN = p.paths.eval_in
+    EVAL_REF = p.paths.eval_ref
     MODEL_BYTES = p.ckpt_bytes
     DATASET_SOURCES = _dataset_sources(p)
 
@@ -141,6 +141,92 @@ def _resume_download(url: str, dst: Path, validator=None, attempts: int = 40) ->
     return dst
 
 
+def _content_length(url: str) -> int | None:
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            n = r.headers.get("Content-Length")
+            return int(n) if n else None
+    except Exception:
+        return None
+
+
+def _parallel_download(url: str, dst: Path, total: int, parts: int = 4) -> Path:
+    """分段并发下载（每段写独立 .partN，最后拼接）。
+
+    为什么需要它：伯克利那台 Apache 对**长时间单连接**限速很狠。实测单连接
+    跑满 45 MB 平均只有 ~80 KB/s，而每次只请求 4 MB 的有界区间能到 ~180 KB/s。
+    分段后每段新建连接，既绕开长连接限速，也避免"卡住要等 90 秒超时"的空转。
+
+    为什么不预分配目标文件再各段 seek 写入：那样 `stat` 会立刻显示文件已达
+    完整大小，看起来像"秒下完"，实际分片还在写——进度不可观测，也容易被误判
+    成成功。写独立分片文件可以让「已下载字节数」= 各分片大小之和，真实可信。
+
+    注意：**同一个目标文件绝不能被两个进程同时下载**——两边各自按"已有大小"
+    推算 Range 起点，会互相覆盖成坏文件。
+    """
+    import shutil
+    from concurrent.futures import ThreadPoolExecutor
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    seg = (total + parts - 1) // parts
+    ranges = [(i * seg, min(total, (i + 1) * seg) - 1) for i in range(parts)]
+    part_paths = [dst.with_name(f"{dst.name}.part{i}") for i in range(parts)]
+
+    def worker(i: int) -> None:
+        start, end = ranges[i]
+        req = urllib.request.Request(url)
+        req.add_header("Range", f"bytes={start}-{end}")
+        with urllib.request.urlopen(req, timeout=180) as r, open(part_paths[i], "wb") as f:
+            while True:
+                chunk = r.read(1 << 16)
+                if not chunk:
+                    break
+                f.write(chunk)
+
+    try:
+        with ThreadPoolExecutor(max_workers=parts) as ex:
+            for fu in [ex.submit(worker, i) for i in range(parts)]:
+                fu.result()
+
+        with open(dst, "wb") as out:
+            for i, (start, end) in enumerate(ranges):
+                expect = end - start + 1
+                got = part_paths[i].stat().st_size
+                if got != expect:
+                    raise RuntimeError(f"分片 {i} 大小不符：{got}/{expect}")
+                with open(part_paths[i], "rb") as f:
+                    shutil.copyfileobj(f, out)
+    finally:
+        for p in part_paths:
+            p.unlink(missing_ok=True)
+
+    return dst
+
+
+def _ensure_file(url: str, dst: Path, total: int,
+                 validator=None, parts: int = 4) -> Path:
+    """把 dst 备齐到 total 字节：能用就复用，不能用就分段并发重下。"""
+    ok = validator or (lambda p: p.exists() and p.stat().st_size >= total)
+    if ok(dst):
+        return dst
+    if dst.exists():
+        _p(f"  文件不完整（{dst.stat().st_size}/{total} B），重新分段下载…")
+        dst.unlink()
+    _p(f"  分段并发下载（{parts} 路，{total/1024/1024:.1f} MB）…")
+    try:
+        _parallel_download(url, dst, total, parts)
+    except Exception as e:
+        _p(f"  分段下载失败（{type(e).__name__}），回退单连接续传…")
+        if dst.exists():
+            dst.unlink()
+        _resume_download(url, dst, validator)
+        return dst
+    if not ok(dst):
+        raise SystemExit(f"下载校验失败：{dst}（{dst.stat().st_size}/{total} B）")
+    return dst
+
+
 def download_model(force: bool = False) -> Path:
     MODELS.mkdir(parents=True, exist_ok=True)
     dst = PAIR.weights
@@ -148,11 +234,11 @@ def download_model(force: bool = False) -> Path:
     if ok(dst) and not force:
         _p(f"  [跳过] 权重已存在 {dst.stat().st_size/1024/1024:.1f} MB")
         return dst
-    _p("  下载预训练权重（支持断点续传）…")
+    _p("  下载预训练权重（分段并发，支持断点续传）…")
     for label, url in model_sources():
         try:
             _p(f"  尝试 {label}…")
-            _resume_download(url, dst, ok)
+            _ensure_file(url, dst, MODEL_BYTES, ok)
             if ok(dst):
                 _p(f"  [完成] {dst} ({dst.stat().st_size/1024/1024:.1f} MB)"
                    f"，来源：{label}")
@@ -162,7 +248,7 @@ def download_model(force: bool = False) -> Path:
             _p(f"  [放弃] {label} 不可用，换下一个源")
             continue
     raise SystemExit(
-        "权重下载失败：所有镜像都不可用。手动下载 horse2zebra.pth 放到 "
+        f"权重下载失败：所有镜像都不可用。手动下载 {PAIR.ckpt_file} 放到 "
         f"{dst} 后重跑 setup 即可（完整大小 {MODEL_BYTES/1024/1024:.1f} MB）。")
 
 
@@ -209,9 +295,14 @@ def download_dataset() -> Path:
     for fname, url, size_mb in DATASET_SOURCES:
         dst = ART / fname
         try:
-            _p(f"  下载 {fname}（约 {size_mb} MB，支持断点续传）…")
-            _resume_download(url, dst, _zip_ok,
-                             attempts=20 if size_mb < 10 else 4)
+            total = _content_length(url)
+            if total:
+                _p(f"  下载 {fname}（{total/1024/1024:.1f} MB，分段并发）…")
+                _ensure_file(url, dst, total, _zip_ok)
+            else:
+                _p(f"  下载 {fname}（约 {size_mb} MB，单连接续传）…")
+                _resume_download(url, dst, _zip_ok,
+                                 attempts=20 if size_mb < 10 else 4)
             _p(f"  [完成] {fname}（{dst.stat().st_size/1024/1024:.1f} MB）")
             return dst
         except SystemExit:
@@ -285,8 +376,8 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
             if save(z, name, CALIB / f"calib_{i:03d}.png"):
                 written.append(name)
 
-        # 完整评测集（方案 §4）：testA/testB 全量，与 samples/ 演示样例分开存放。
-        eval_a, eval_b = _extract_eval_sets(z, skipped, zip_path.name)
+        # 完整评测集（方案 §4）：输入域/参照域全量，与 samples/ 演示样例分开存放。
+        n_in, n_ref = _extract_eval_sets(z, skipped, zip_path.name)
 
     # 留一份来源清单，报告里可以据此证明校准集与评测集不重叠
     (CALIB / "manifest.json").write_text(
@@ -302,7 +393,7 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
         }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _p(f"  来源 {zip_path.name}：样例 {used} 张，校准集 {len(written)} 张，"
-       f"评测集 testA {eval_a} 张 / testB {eval_b} 张")
+       f"评测集 输入批 {n_in} 张（{PAIR.input_dir}）/ 参照批 {n_ref} 张（{PAIR.ref_dir}）")
     if skipped:
         _p(f"  ⚠️ {len(skipped)} 个 zip 条目解压失败已跳过（见 calib/manifest.json）")
     if len(written) < n_calib:
@@ -314,7 +405,8 @@ def prepare_samples(n_horse: int = N_SAMPLE_HORSE, n_zebra: int = N_SAMPLE_ZEBRA
 def _extract_eval_sets(z, skipped: list[str], zip_name: str) -> tuple[int, int]:
     """从已打开的数据集 zip 解压完整评测集（方案 §4）。
 
-    testA 全部马图 → eval/testA，testB 全部斑马图 → eval/testB。
+    按「角色」落盘，不按 zip 的 testA/testB 落盘：
+      输入域（pair.input_dir）→ eval/input，参照域（pair.ref_dir）→ eval/ref。
     原始 jpg 字节直接落盘（不重编码），与 zip 条目逐一对应。
     """
     names = z.namelist()
@@ -325,37 +417,37 @@ def _extract_eval_sets(z, skipped: list[str], zip_name: str) -> tuple[int, int]:
     if not inp and not ref:
         return 0, 0
 
-    EVAL_A.mkdir(parents=True, exist_ok=True)
-    EVAL_B.mkdir(parents=True, exist_ok=True)
+    EVAL_IN.mkdir(parents=True, exist_ok=True)
+    EVAL_REF.mkdir(parents=True, exist_ok=True)
     n_a = n_b = 0
     for name in inp:
         try:
-            (EVAL_A / Path(name).name).write_bytes(z.read(name))
+            (EVAL_IN / Path(name).name).write_bytes(z.read(name))
             n_a += 1
         except Exception as e:
             skipped.append(f"{name}（{type(e).__name__}）")
     for name in ref:
         try:
-            (EVAL_B / Path(name).name).write_bytes(z.read(name))
+            (EVAL_REF / Path(name).name).write_bytes(z.read(name))
             n_b += 1
         except Exception as e:
             skipped.append(f"{name}（{type(e).__name__}）")
 
-    (EVAL_A.parent / "manifest.json").write_text(
+    (EVAL_IN.parent / "manifest.json").write_text(
         json.dumps({
             "source_zip": zip_name,
             "pair": PAIR.id,
-            "input_dir": PAIR.input_dir,
-            "ref_dir": PAIR.ref_dir,
-            "testA": {"entries": len(inp), "written": n_a},
-            "testB": {"entries": len(ref), "written": n_b},
+            "input": {"role": "生成批", "from": PAIR.input_dir,
+                      "entries": len(inp), "written": n_a},
+            "ref": {"role": "FID/KID 参照批", "from": PAIR.ref_dir,
+                    "entries": len(ref), "written": n_b},
             "protocol": "方案 §4：生成批 = 输入域全量，FID/KID 参照批 = 目标域全量",
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     return n_a, n_b
 
 
 def prepare_eval() -> tuple[int, int]:
-    """确保完整评测集就位（eval/testA、eval/testB），返回 (马图数, 斑马图数)。
+    """确保完整评测集就位（eval/input、eval/ref），返回 (输入批数, 参照批数)。
 
     已解压则直接返回；本地没有数据集 zip 时安静跳过，
     调用方回退到 samples/ 的演示样例并提示样本量不足。
@@ -364,7 +456,7 @@ def prepare_eval() -> tuple[int, int]:
         return ([p for p in d.iterdir() if p.suffix.lower() in _IMG_EXTS]
                 if d.exists() else [])
 
-    a, b = count(EVAL_A), count(EVAL_B)
+    a, b = count(EVAL_IN), count(EVAL_REF)
     if a and b:
         return len(a), len(b)
 
@@ -387,14 +479,14 @@ def _list_imgs(d: Path, prefix: str | None = None) -> list[Path]:
 
 
 def eval_input_paths(limit: int | None = None) -> list[Path]:
-    """生成批输入：优先 eval/testA 全量（方案 §4），退而求其次 samples/<input_prefix>_*。"""
-    ps = _list_imgs(EVAL_A) or _list_imgs(SAMPLES, PAIR.input_prefix)
+    """生成批输入：优先 eval/input 全量（方案 §4），退而求其次 samples/<input_prefix>_*。"""
+    ps = _list_imgs(EVAL_IN) or _list_imgs(SAMPLES, PAIR.input_prefix)
     return ps[:limit] if limit else ps
 
 
 def eval_ref_paths(limit: int | None = None) -> list[Path]:
-    """FID/KID 参照批（真实目标域）：优先 eval/testB 全量，退而其次 samples/<ref_prefix>_*。"""
-    ps = _list_imgs(EVAL_B) or _list_imgs(SAMPLES, PAIR.ref_prefix)
+    """FID/KID 参照批（真实目标域）：优先 eval/ref 全量，退而其次 samples/<ref_prefix>_*。"""
+    ps = _list_imgs(EVAL_REF) or _list_imgs(SAMPLES, PAIR.ref_prefix)
     return ps[:limit] if limit else ps
 
 
@@ -599,7 +691,7 @@ def cmd_quality(args):
         raise SystemExit("没有评测马图，先跑 python cli.py setup")
     if len(horses) < args.limit:
         _p(f"  ⚠️ 评测图只有 {len(horses)} 张（--limit {args.limit}），"
-           f"方案 §4 口径是 testA 全量 120 张，报告请如实写明实际样本量")
+           f"方案 §4 口径是输入域全量（{PAIR.input_dir} 全部），报告请如实写明实际样本量")
 
     rows = []
     YA, YB, YC, inputs = [], [], [], []

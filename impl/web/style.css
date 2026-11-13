@@ -1801,6 +1801,75 @@ tbody tr:last-child td {
   }
 }
 
+/* ── 迁移对选择器 ─────────────────────────────────────────── */
+
+.pairpick {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px 3px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.pairpick__label {
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+#pairSelect {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 2px 16px 2px 0;
+  cursor: pointer;
+  /* 自绘下拉箭头，避免引入外部图标依赖 */
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: right 6px center, right 2px center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  max-width: 190px;
+}
+
+#pairSelect:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+#pairSelect option {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+#pairTypeChip {
+  font-weight: 500;
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+/* 该指标不适用于当前迁移对时的呈现 */
+.metric-off {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  border-radius: 4px;
+  color: var(--ink-4);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  vertical-align: 1px;
+}
+
 @media print {
   .masthead,
   .rail,

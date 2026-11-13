@@ -1,0 +1,137 @@
+{
+  "generated_at": "2026-11-13 14:09:24",
+  "n_samples": 6,
+  "metrics_source": "proxy",
+  "mean": {
+    "ssim_ab": 0.999999,
+    "edge_ssim_ab": 0.999997,
+    "psnr_ab": 85.695,
+    "ssim_bc": 0.89513,
+    "edge_ssim_bc": 0.737108,
+    "psnr_bc": 29.831667,
+    "ssim_ac": 0.895128,
+    "edge_ssim_ac": 0.73711
+  },
+  "rows": [
+    {
+      "sample": "n02391049_100",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_100.jpg",
+      "ssim_ab": 0.999999,
+      "edge_ssim_ab": 0.999995,
+      "mae_ab": 0.0001,
+      "psnr_ab": 87.26,
+      "ssim_bc": 0.874111,
+      "edge_ssim_bc": 0.54621,
+      "mae_bc": 5.8833,
+      "psnr_bc": 30.62,
+      "ssim_ac": 0.874112,
+      "edge_ssim_ac": 0.546204,
+      "lpips": {
+        "L_ab": 3e-06,
+        "L_bc": 0.28984,
+        "L_ac": 0.289842,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "n02391049_1000",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_1000.jpg",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 1.0,
+      "mae_ab": 0.0002,
+      "psnr_ab": 84.53,
+      "ssim_bc": 0.935813,
+      "edge_ssim_bc": 0.872945,
+      "mae_bc": 7.6344,
+      "psnr_bc": 28.08,
+      "ssim_ac": 0.93581,
+      "edge_ssim_ac": 0.872943,
+      "lpips": {
+        "L_ab": 0.0,
+        "L_bc": 0.095621,
+        "L_ac": 0.095623,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "n02391049_10100",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_10100.jpg",
+      "ssim_ab": 0.999998,
+      "edge_ssim_ab": 0.99999,
+      "mae_ab": 0.0004,
+      "psnr_ab": 82.37,
+      "ssim_bc": 0.855293,
+      "edge_ssim_bc": 0.677235,
+      "mae_bc": 6.1935,
+      "psnr_bc": 30.2,
+      "ssim_ac": 0.855291,
+      "edge_ssim_ac": 0.67725,
+      "lpips": {
+        "L_ab": 6e-06,
+        "L_bc": 0.233736,
+        "L_ac": 0.233729,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "n02391049_10160",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_10160.jpg",
+      "ssim_ab": 0.999999,
+      "edge_ssim_ab": 0.999998,
+      "mae_ab": 0.0002,
+      "psnr_ab": 86.15,
+      "ssim_bc": 0.932142,
+      "edge_ssim_bc": 0.822662,
+      "mae_bc": 6.1527,
+      "psnr_bc": 29.87,
+      "ssim_ac": 0.93214,
+      "edge_ssim_ac": 0.822662,
+      "lpips": {
+        "L_ab": 1e-06,
+        "L_bc": 0.122598,
+        "L_ac": 0.122599,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "n02391049_1020",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_1020.jpg",
+      "ssim_ab": 1.0,
+      "edge_ssim_ab": 0.999999,
+      "mae_ab": 0.0001,
+      "psnr_ab": 90.28,
+      "ssim_bc": 0.867389,
+      "edge_ssim_bc": 0.697798,
+      "mae_bc": 5.956,
+      "psnr_bc": 30.37,
+      "ssim_ac": 0.867388,
+      "edge_ssim_ac": 0.6978,
+      "lpips": {
+        "L_ab": 1e-06,
+        "L_bc": 0.217407,
+        "L_ac": 0.217406,
+        "note": "proxy"
+      }
+    },
+    {
+      "sample": "n02391049_10210",
+      "input": "artifacts\\zebra2horse\\eval\\input\\n02391049_10210.jpg",
+      "ssim_ab": 0.999999,
+      "edge_ssim_ab": 0.999999,
+      "mae_ab": 0.0003,
+      "psnr_ab": 83.58,
+      "ssim_bc": 0.906029,
+      "edge_ssim_bc": 0.805799,
+      "mae_bc": 6.2351,
+      "psnr_bc": 29.85,
+      "ssim_ac": 0.906028,
+      "edge_ssim_ac": 0.8058,
+      "lpips": {
+        "L_ab": 1e-06,
+        "L_bc": 0.144086,
+        "L_ac": 0.144086,
+        "note": "proxy"
+      }
+    }
+  ]
+}

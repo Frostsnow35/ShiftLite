@@ -30,6 +30,20 @@ artifacts/results/structure_review/*.png
 artifacts/results/_*
 artifacts/figures/*.png
 
+# ── 非默认迁移对的中间产物（artifacts/<pair>/…）──
+# 只保留 results/ 下的 JSON 证据（benchmark/quality/layers），
+# 权重、数据集、样例、校准集、推理图一律不入库，setup 可再生。
+artifacts/*/models/
+artifacts/*/calib/
+artifacts/*/samples/
+artifacts/*/eval/
+artifacts/*/uploads/
+artifacts/*/results/inference/
+artifacts/*/results/quality/
+artifacts/*/results/anomalies/*.png
+artifacts/*/results/_*
+artifacts/*/*.zip
+
 # ── 编辑器 / 系统 ──
 .vscode/
 .idea/
