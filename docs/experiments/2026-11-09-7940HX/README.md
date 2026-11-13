@@ -13,7 +13,7 @@
 
 ## 复核拼图：一张压缩图，不占仓库空间
 
-10 张对照图的完整 ZIP 不进仓库、也不需要上传。目视复核改由**一张拼图**承担：把 10 张按 [固定顺序](legacy_samples.json) 缩到每格宽 256 px、拼成 2 列 × 5 行、每格标注样本 ID，JPEG 质量 75 左右，整张控制在 200 KB 内，直接拖进 PR 评论框。图片由 GitHub 托管，不进 Git、不占仓库体积。
+10 张对照图的完整 ZIP 不进仓库、也不需要上传。目视复核改由**一张拼图**承担：把 10 张按 [固定顺序](legacy_samples.json) 缩到每格宽 512 px、拼成 2 列 × 5 行、每格标注样本 ID，JPEG 质量 70，整张控制在 500 KB 内，直接拖进 PR 评论框。图片由 GitHub 托管，不进 Git、不占仓库体积。
 
 生成示例（在装有 Pillow 的环境，输入目录为 ZIP 解压后的 `images/`）：
 
@@ -31,7 +31,7 @@ for i, sid in enumerate(order):
     x, y = (i % 2) * cell[0], (i // 2) * cell[1]
     sheet.paste(im, (x, y + 20))
     draw.text((x + 4, y + 4), sid, fill='black')
-sheet.save('review_contact_sheet.jpg', quality=75, optimize=True)
+sheet.save('review_contact_sheet.jpg', quality=70, optimize=True)
 ```
 
 拼图是有损缩略图，只用于目视判断，**不能作为哈希核验依据**。原图完整性仍以 `image-manifest.json` 的 SHA-256 为准：取得同批次原图后用 PowerShell `Get-FileHash -Algorithm SHA256 -LiteralPath <图片路径>` 比对，一致才复用 CSV 中的人工结论。需要逐张原图时，按 [通用复现指南](../../REPRODUCING_T0_T1.md) 完成 quality-v2 评测，再运行 `python cli.py review-materials --sample-list <本目录/legacy_samples.json> --output <新材料目录>` 本地重建；重建图哈希不一致则人工表保持 pending。
