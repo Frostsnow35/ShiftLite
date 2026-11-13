@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #33</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+  .warn { border-left: 3px solid #f5c518; background: rgba(245,197,24,.12); padding: .5rem .8rem; margin: .8rem 0; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明 — PR #33</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request, per <code>docs/AI_POLICY.md</code> and <code>AGENTS.md</code>. 本文件随 PR 提交，路径 <code>reviews/PR-33.html</code>。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>33</dd>
+  <dt>作者 / Author</dt><dd>WorkBuddy（AI 编码 Agent）产出，仓库 owner 逐轮确认方案后方合入</dd>
+  <dt>日期 / Date</dt><dd>2026-11-13</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash</dd>
+  <dt>关联 / Related</dt><dd>Closes #24</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 实现 issue #24：把「换权重即换应用」从代码挪到数据，新增 manifest 驱动的迁移对配置层（<code>core/pairs.py</code> + <code>pairs/*.json</code>），并把系统从单对 horse2zebra 扩展为四类迁移任务。同时用新增的反向对 <code>zebra2horse</code> 做端到端验证（setup → bench → quality → layers → Web），并用它暴露了两个方向性缺陷：数据集名不能推断权重方向、评测集目录按 zip 的 testA/testB 命名会自相矛盾。</p>
+<p class="en">This PR implements issue #24: it moves "swap the weights, swap the application" from code into data by introducing a manifest-driven pair layer (<code>core/pairs.py</code> plus <code>pairs/*.json</code>), and extends the system from a single horse2zebra pair to four translation types. The new reverse pair <code>zebra2horse</code> is used for end-to-end validation (setup → bench → quality → layers → Web) and exposed two direction-related defects: dataset names do not determine weight direction, and naming eval directories after the zip's testA/testB becomes self-contradictory.</p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>impl/core/pairs.py</code></td><td>新增。Pair / Paths 数据类、manifest 加载、路径策略（默认 pair 平铺，其余落 <code>artifacts/&lt;id&gt;/</code>）。/ New. Pair and Paths dataclasses, manifest loading, path strategy.</td></tr>
+  <tr><td><code>impl/pairs/*.json</code></td><td>新增四份 manifest：horse2zebra、zebra2horse、summer2winter、style_monet，显式声明 <code>input_dir / ref_dir / calib_dir</code> 与指标开关。/ Four manifests with explicit domain mapping and metric switches.</td></tr>
+  <tr><td><code>impl/cli.py</code></td><td>全部硬编码路径改为 pair 派生；子命令新增 <code>--pair</code>；评测集按角色落盘（<code>eval/input</code>、<code>eval/ref</code>）。/ Hard-coded paths replaced by pair-derived ones; <code>--pair</code> added; eval sets written by role.</td></tr>
+  <tr><td><code>impl/server.py</code></td><td>PAIRS 注册表、<code>?pair=</code> 与 <code>body.pair</code>、Runtime 单驻留（<code>_MAX_RESIDENT=1</code>）、未知 pair 拒绝。/ Pair registry, pair parameters, single resident runtime, rejection of unknown pairs.</td></tr>
+  <tr><td><code>impl/web/*</code></td><td>顶部迁移对下拉框与类型标签；切换时清空上一对画面；质量页按 manifest 开关显示指标并标注不适用原因。/ Pair selector and type chip; viewer reset on switch; metric availability driven by the manifest.</td></tr>
+  <tr><td><code>impl/README.md</code></td><td>新增第九节：四个迁移对、方向陷阱、路径策略、zebra2horse 实测、E4 跨类型对比、已知限制。/ New section 9 with pairs, direction pitfall, path strategy, measurements, cross-type E4, limitations.</td></tr>
+  <tr><td><code>impl/artifacts/zebra2horse/results/*.json</code></td><td>新增该 pair 的 benchmark / quality / layers 证据（权重、数据集、图片均不入库）。/ Evidence JSONs for the new pair; no weights, datasets or images are committed.</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash。</li>
+  <li>参与范围 / Extent：本 PR 的代码（<code>core/pairs.py</code>、<code>cli.py</code> 的 pair 化改造、<code>server.py</code> 的 pair 路由、<code>web/</code> 的切换控件、README 第九节）**全部由 AI 生成**；<code>pairs/*.json</code> 的域映射由 AI 依据官方 download 脚本与数据集目录结构核实后写入。<br><span class="en">All code in this PR was produced by the AI agent. The domain mapping in <code>pairs/*.json</code> was verified by the agent against the official download script and dataset layout.</span></li>
+  <li>人工复核 / Human review：仓库 owner 逐轮确认实施方案与待定项（路径策略、指标开关、风格 pair 的选取），未逐行 review 代码；实测数字由 Agent 执行命令后贴在会话里，owner 可见。<br><span class="en">The repository owner approved the approach and open decisions round by round and reviewed the reported measurements, but did not perform a line-by-line code review.</span></li>
+  <li>刻意未做的事 / Deliberately not done：AI 没有自行决定 #24 的四项待定项，而是逐项提出默认建议并等待 owner 确认；也没有为了让数字好看而调整测量口径。<br><span class="en">The agent did not unilaterally decide the four open items, and did not adjust measurement protocols to make numbers look better.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>全部在本机 <strong>AMD Ryzen 7 7745HX</strong>（CPU，OpenVINO 2026.4.1 / NNCF 3.4.0 / torch 2.14.1+cpu）实测，命令与输出如下。<span class="en">All measurements were taken on an AMD Ryzen 7 7745HX CPU (OpenVINO 2026.4.1 / NNCF 3.4.0 / torch 2.14.1+cpu).</span></p>
+
+<table>
+  <tr><th>验证项 / Item</th><th>命令 / Command</th><th>结果 / Result</th></tr>
+  <tr><td>默认 pair 回归 / Regression</td><td><code>cli.py setup|bench --pair horse2zebra</code></td><td>A 254.3 / B 129.6 (1.96×) / C 35.9 ms (7.09×)</td></tr>
+  <tr><td>新 pair 落地 / New pair</td><td><code>cli.py setup --pair zebra2horse</code></td><td>转换 <code>max|Δ|=0.0004</code> 灰度级；INT8 11.1 MB</td></tr>
+  <tr><td>新 pair 测速 / Bench</td><td><code>cli.py bench --pair zebra2horse</code></td><td>A 320.7 / B 188.3 (1.70×) / C 54.6 ms (5.87×)</td></tr>
+  <tr><td>质量 / Quality</td><td><code>cli.py quality --pair zebra2horse --limit 6</code></td><td><code>ssim_ab≈1.0000</code>、<code>psnr_ab 82–90 dB</code>；<code>ssim_bc 0.855–0.936</code>、<code>psnr_bc 28.1–30.6 dB</code></td></tr>
+  <tr><td>E4 层间 / Layers</td><td><code>cli.py layers --pair zebra2horse --limit 120</code></td><td>15 层；漂移最大 <code>resblock_09</code>，余弦 0.9662；<code>down_*</code> ≈0.9997</td></tr>
+  <tr><td>HTTP 层 / HTTP</td><td><code>curl /api/state?pair=…</code>、<code>/api/infer</code></td><td>未知 pair 与 <code>../../etc/passwd</code> 均被拒；三组推理出图正常</td></tr>
+  <tr><td>方向人工核对 / Direction check</td><td>肉眼比对输入与 A/B/C 输出</td><td>斑马条纹消失、体色转棕褐，方向正确</td></tr>
+</table>
+
+<div class="warn">
+<strong>口径提醒 / Caveat：</strong>本机数据不能与仓库里 <code>benchmark.json</code>（Intel i5-1340P：A 506.3 / B 431.2 / C 202.6 ms）同表比较，绝对值差一倍以上；跨机型只能比趋势（C &lt; B &lt; A）。<br>
+<span class="en">The numbers here must not be tabulated together with the committed Intel i5-1340P baseline; only the ordering (C &lt; B &lt; A) is comparable across machines.</span>
+</div>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<ol>
+  <li><strong>两个新 pair 未跑通到 benchmark</strong>：<code>summer2winter</code>（126 MB）与 <code>style_monet</code>（291 MB）的 manifest 已就位，但数据集在本机跨境链路下实测只有 40–70 KB/s，尚未完成下载；界面里显示「未就绪」。<span class="en">Two pairs are declared but not yet benchmarked because their datasets could not be downloaded at usable speed from this machine.</span></li>
+  <li><strong>新 pair 只有 proxy 指标</strong>：本机 venv 缺 <code>torchvision</code>，<code>quality --deep</code> 跑不了，<code>zebra2horse/quality.json</code> 的 <code>metrics_source</code> 为 <code>"proxy"</code>，不得与默认 pair 的 <code>real</code> 指标同表。<span class="en">New pairs only carry proxy metrics; they must not be mixed with the real deep metrics of the default pair.</span></li>
+  <li><strong><code>metrics_deep</code> 键名仍是 horse2zebra 专用</strong>（<code>*_vs_real_zebra</code>）。给 <code>zebra2horse</code> 开 <code>--deep</code> 前必须改成按 <code>ref_prefix</code> 命名，否则参照域是「马」却写着「zebra」。<span class="en">Deep-metric keys are still named after zebra; they must be parameterised before enabling <code>--deep</code> on reverse pairs.</span></li>
+  <li><strong>Runtime 单驻留</strong>：切换 pair 会重编译（秒级）。若后续要频繁对比，考虑 LRU=2，代价是常驻内存 +0.3–0.5 GB。<span class="en">Only one runtime stays resident; switching recompiles. LRU=2 is possible at the cost of extra RSS.</span></li>
+  <li><strong><code>bench</code> 会覆盖证据文件</strong>：本次开发中确实覆盖过已入库的 <code>benchmark.json</code>（用 <code>git checkout</code> 还原）。默认 pair 的证据文件路径未变，该风险仍在。<span class="en"><code>bench</code> overwrites the committed evidence file; this actually happened during development and had to be restored.</span></li>
+</ol>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox" checked> 四个 <code>pairs/*.json</code> 的 <code>input_dir / ref_dir</code> 与官方权重方向一致（尤其 <code>style_monet</code> 的 B→A） / Domain mapping matches the official weight direction</li>
+  <li><input type="checkbox" checked> 新 pair 的校准集取 <code>trainX</code>，与 <code>testX</code> 评测集隔离，无数据泄漏 / Calibration uses train split, no leakage</li>
+  <li><input type="checkbox" checked> 默认 pair 的已入库证据未被改动 / Committed evidence of the default pair untouched</li>
+  <li><input type="checkbox"> 已确认本机数据不与 i5-1340P 数据同表比较 / Cross-machine numbers are not tabulated together</li>
+  <li><input type="checkbox"> 已确认 proxy 指标不会进入正式报告 / Proxy metrics will not enter the formal report</li>
+</ul>
+</body>
+</html>
