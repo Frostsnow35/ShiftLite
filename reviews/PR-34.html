@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #34</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+  .warn { border-left: 3px solid #f5c518; background: rgba(245,197,24,.12); padding: .5rem .8rem; margin: .8rem 0; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明 — PR #34</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request, per <code>docs/AI_POLICY.md</code> and <code>AGENTS.md</code>. 本文件随 PR 提交，路径 <code>reviews/PR-34.html</code>。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>34</dd>
+  <dt>作者 / Author</dt><dd>WorkBuddy（AI 编码 Agent）产出，仓库 owner 确认范围与取舍后合入</dd>
+  <dt>日期 / Date</dt><dd>2026-11-13</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash</dd>
+  <dt>关联 / Related</dt><dd>Closes #32</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 实现 issue #32：补齐主线做不到的那件事——**用一张任意参考图决定输出风格**。新增 <code>impl/stylize/</code>（AdaIN），提供命令行与界面两个入口，并对 AdaIN 做了一次完整的 INT8 量化对照实验。支线与主线并列而非嵌套：CycleGAN 换实例外观，AdaIN 换画风，指标不与 A/B/C 混表，产物不写 <code>artifacts/results/</code>。</p>
+<p class="en">This PR implements issue #32: it adds <code>impl/stylize/</code> (AdaIN) so that a <em>reference image</em> can drive the output style — something the CycleGAN main line cannot do. It ships both a CLI and a web entry point, plus a full INT8 quantization ablation. The branch is parallel to, not nested in, the A/B/C main line: CycleGAN changes instance appearance while AdaIN changes painting style, so their metrics are not tabulated together.</p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>impl/stylize/adain.py</code></td><td>新增。VGG19 <code>children[:31]</code> + AdaIN + 9 层 decoder，逐层对齐官方 <code>net.py</code>；decoder 3.51 M 参数 ≈ 13.4 MB，与官方 <code>decoder.pth</code> 字节数吻合。/ New model definition, layer-for-layer matching the official implementation.</td></tr>
+  <tr><td><code>impl/stylize/run.py</code></td><td>新增。六个子命令：download / fetch-samples / poc / convert / quantize / bench。/ New CLI with six subcommands.</td></tr>
+  <tr><td><code>impl/stylize/README.md</code></td><td>新增。实测数据、三个坑、隔离约定、DoD 对照。/ New docs with measurements, pitfalls and isolation rules.</td></tr>
+  <tr><td><code>impl/cli.py</code></td><td>新增 <code>stylize</code> 子命令，参数透传给 <code>stylize/run.py</code>，不把支线实现塞进主线。/ Thin forwarding subcommand.</td></tr>
+  <tr><td><code>impl/server.py</code></td><td>新增 <code>/api/stylize/state</code> 与 <code>/api/stylize</code>（torch / ov / int8），静态服务放行 <code>/stylize/</code>。/ New endpoints for the branch.</td></tr>
+  <tr><td><code>impl/web/*</code></td><td>新增「05 风格化（支线）」页签：选图/上传、风格选择、α 滑杆、后端切换、三列对照。/ New tab with pickers, alpha slider and backend switch.</td></tr>
+  <tr><td><code>impl/.gitignore</code></td><td>忽略 <code>artifacts/adain/</code>；<code>stylize/.gitignore</code> 忽略权重与风格图。/ Artifacts and third-party assets excluded.</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash。</li>
+  <li>参与范围 / Extent：本 PR 的全部代码与文档由 AI 生成；网络结构依据官方 <code>net.py</code> 逐层复现，权重文件由 <code>download</code> 子命令从官方 release 拉取。<br><span class="en">All code and docs were produced by the AI agent; the architecture was reproduced layer-by-layer from the official <code>net.py</code>.</span></li>
+  <li>人工复核 / Human review：仓库 owner 决定了「先放弃 #24、先完成 #32」的优先级，并确认了「支线与主线不混指标」的边界；未逐行 review 代码。<br><span class="en">The repository owner set the priority and approved the isolation boundary; no line-by-line code review was performed.</span></li>
+  <li>AI 自己发现并修正的错误（如实披露）/ Self-corrected mistakes：<br>
+    (a) 首次转换时未关 <code>compress_to_fp16</code>，导致「FP32 基线」自带 0.0146 误差，发现后改为 <code>compress_to_fp16=False</code>；<br>
+    (b) 量化校准时未传 <code>--size</code>，512 模型喂 256 张量触发 shape 报错，已修；<br>
+    (c) issue 原文假设「AdaIN 可复用排除 MVN 的经验」，实测发现 AdaIN 在 IR 里没有 MVN 节点（拆成原语），已在实现与文档中修正该假设。<br>
+    <span class="en">Three mistakes were found and fixed during development: fp16-compressed baseline, calibration size mismatch, and the incorrect assumption that AdaIN exposes an MVN node.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>全部在本机 <strong>AMD Ryzen 7 7745HX</strong>（CPU；OpenVINO 2026.4.1 / NNCF 3.4.0 / torch 2.14.1+cpu）实测。<span class="en">All measurements taken on an AMD Ryzen 7 7745HX CPU.</span></p>
+
+<table>
+  <tr><th>验证项 / Item</th><th>命令 / Command</th><th>结果 / Result</th></tr>
+  <tr><td>结构对齐 / Architecture</td><td>参数量核算</td><td>decoder 3.51 M ≈ 13.4 MB，与官方 <code>decoder.pth</code>（14,023,458 B）吻合</td></tr>
+  <tr><td>出图 / Stylize</td><td><code>cli.py stylize poc --grid</code></td><td>三张风格图出图风格明显不同，主体形态保持；α=0 为重建对照</td></tr>
+  <tr><td>转换 / Convert</td><td><code>convert --size 256/512</code></td><td>锁 f32 后 max\|Δ\| = 7.5e-5 / 8.9e-5；默认 bf16 分别为 5.2% / 38.9% 幅度</td></tr>
+  <tr><td>量化 / Quantize</td><td><code>quantize --exclude-norm</code></td><td>256：24.05 → 29.01 dB；512：16.50 → 28.87 dB</td></tr>
+  <tr><td>延迟 / Bench</td><td><code>bench --size 256/512</code></td><td>256：A 265.5 / B 154.4 / C 55.0 ms；512：A 1258.6 / B 690.7 / C 248.5 ms</td></tr>
+  <tr><td>HTTP / API</td><td><code>curl /api/stylize</code></td><td>三后端均出图；非法参数与缺失图片被拒；α 在 INT8 生效（MAE 26.8 / 23.5）</td></tr>
+  <tr><td>界面 / UI</td><td>无头 Chrome 截图</td><td>三列对照出图正常，指标显示 136.5 ms · 7.3 FPS · 256×256</td></tr>
+</table>
+
+<div class="warn">
+<strong>口径提醒 / Caveat：</strong>本支线的 PSNR/SSIM 是「INT8 对 OV FP32」的数值保真度，<b>不是</b>风格迁移质量评价（该类任务没有 ground truth）。PSNR 高只说明「量化没改坏输出」，不说明「画得好」。<br>
+<span class="en">These PSNR/SSIM values measure numerical fidelity of INT8 against OV FP32, not stylization quality — this task has no ground truth.</span>
+</div>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<ol>
+  <li><strong>未接感知指标</strong>：本机 venv 无 <code>torchvision</code>，LPIPS/FID 未接入；当前只有 PSNR/SSIM。<span class="en">No perceptual metrics yet (no torchvision locally).</span></li>
+  <li><strong>IR 为静态形状</strong>：OV / INT8 固定 256 输入，与 PyTorch 后端的原分辨率不一致（UI 已注明）。<span class="en">Static-shape IR at 256 for the OV/INT8 backends.</span></li>
+  <li><strong>权重与图片不入库</strong>：94 MB 权重 + 第三方画作（版权），由 <code>download</code> / <code>fetch-samples</code> 获取；CI 环境无法跑端到端，只能做语法检查。<span class="en">Weights and third-party images are not committed; CI cannot run end-to-end.</span></li>
+  <li><strong>分辨率敏感性</strong>：用 256 校准的 INT8 跑 512 会掉到 16.5 dB，换分辨率必须重校准。已在 README 写明。<span class="en">Calibration resolution must match inference resolution.</span></li>
+</ol>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox" checked> 支线与主线口径隔离（不写 <code>artifacts/results/</code>、不与 A/B/C 混表） / Isolation from the main line is respected</li>
+  <li><input type="checkbox" checked> 网络结构与官方 <code>net.py</code> 逐层一致，权重字节数吻合 / Architecture matches the official implementation</li>
+  <li><input type="checkbox" checked> 「FP32 基线」未被 fp16 压缩污染 / The FP32 baseline is not fp16-compressed</li>
+  <li><input type="checkbox"> 已确认 PSNR/SSIM 不会被当作「风格迁移质量」引用 / Numbers will not be cited as stylization quality</li>
+  <li><input type="checkbox"> 已确认本支线不进开题报告，仅作期末/答辩并列项 / The branch stays out of the proposal report</li>
+</ul>
+</body>
+</html>

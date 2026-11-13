@@ -48,6 +48,10 @@
             data-panel="plan" tabindex="-1">
       <span class="tab__idx">04</span><span class="tab__label">实验进度</span>
     </button>
+    <button class="tab" role="tab" id="tab-style" aria-controls="page-style" aria-selected="false"
+            data-panel="style" tabindex="-1">
+      <span class="tab__idx">05</span><span class="tab__label">风格化（支线）</span>
+    </button>
     <span class="tabbar__indicator" id="tabIndicator" aria-hidden="true"></span>
   </nav>
 </header>
@@ -339,6 +343,91 @@
       </div>
       <div class="honesty" id="honestyBox"></div>
     </section>
+  </section>
+
+  <!-- ══════════ 05 风格化（AdaIN 支线，issue #32） ══════════ -->
+  <section class="page" id="page-style" role="tabpanel" aria-labelledby="tab-style" tabindex="0">
+    <header class="page__head">
+      <p class="eyebrow">Bonus · 任意参考图</p>
+      <h2 class="page__title">风格化（AdaIN 支线）</h2>
+      <p class="page__lede">上传任意内容图 + 选任意风格图，输出保内容、换画风。这是与主线并列的支线任务，
+        <b>不是</b>同一个模型：AdaIN 只换画风（马还是马），CycleGAN 换的是实例外观（马→斑马）。
+        两者指标不可直接比较，也不并入 A/B/C 三组口径。</p>
+    </header>
+
+    <div class="layout-demo">
+      <aside class="rail">
+        <section class="step">
+          <h3 class="step__title"><span class="step__num" aria-hidden="true">1</span>内容图</h3>
+          <div class="samples" id="styleContents" role="radiogroup" aria-label="内容图"></div>
+          <label class="dropzone" id="styleUploadLabel">
+            <input type="file" id="styleFileInput" accept="image/*" hidden>
+            <span class="up-icon" aria-hidden="true">↑</span>
+            <span>上传内容图</span>
+            <small>任意照片；保持原分辨率（自动对齐到 8 的倍数）</small>
+          </label>
+        </section>
+
+        <section class="step">
+          <h3 class="step__title"><span class="step__num" aria-hidden="true">2</span>风格参考图</h3>
+          <div class="samples" id="styleRefs" role="radiogroup" aria-label="风格参考图"></div>
+          <p class="hint">换一张风格图，输出的色调与笔触就跟着变——这正是 CycleGAN 做不到的那件事。</p>
+        </section>
+
+        <section class="step">
+          <h3 class="step__title"><span class="step__num" aria-hidden="true">3</span>强度与后端</h3>
+          <label class="alpha-row">
+            <span>风格强度 α</span>
+            <input type="range" id="alphaRange" min="0" max="1" step="0.05" value="1">
+            <output id="alphaOut">1.00</output>
+          </label>
+          <div class="segments" id="styleBackends" role="radiogroup" aria-label="推理后端"></div>
+          <p class="hint">α=0 等价于只走一遍解码器（重建），α=1 完全采用风格统计量。</p>
+        </section>
+
+        <button class="btn btn--primary" id="styleRunBtn" disabled>开始风格化</button>
+        <p class="note" id="styleNote" role="status" aria-live="polite"></p>
+      </aside>
+
+      <section class="viewer" aria-label="风格化结果">
+        <div class="viewer__head">
+          <div class="viewer__title">
+            <h3>风格化结果</h3>
+            <span class="badge" id="styleBadge">等待运行</span>
+          </div>
+          <div class="segtool" role="group" aria-label="对照">
+            <span class="hint" id="styleMeta">—</span>
+          </div>
+        </div>
+
+        <div class="stage" id="styleStage" data-mode="side" data-has="0">
+          <div class="stage__empty" id="styleEmpty">
+            <div class="art" aria-hidden="true">🖼 + 🎨</div>
+            <p>选一张内容图、一张风格图，点「开始风格化」</p>
+            <small>左：内容图（保持结构）｜中：风格图（提供色调与笔触）｜右：输出</small>
+          </div>
+          <div class="compare" id="styleCompare">
+            <figure class="pane">
+              <img id="styleImgIn" alt="内容图">
+              <figcaption>内容</figcaption>
+            </figure>
+            <figure class="pane">
+              <img id="styleImgRef" alt="风格参考">
+              <figcaption>风格参考</figcaption>
+            </figure>
+            <figure class="pane">
+              <img id="styleImgOut" alt="风格化输出">
+              <figcaption id="styleCapOut">输出</figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <p class="note" id="styleHint">
+          AdaIN（Huang &amp; Belongie, ICCV 2017）：把内容特征的逐通道均值/方差替换成风格图的统计量，
+          再解码回图像。归一化统计量正是量化的敏感点——本页支持切换 INT8 后端现场对比。
+        </p>
+      </section>
+    </div>
   </section>
 
 </main>

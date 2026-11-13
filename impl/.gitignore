@@ -44,6 +44,9 @@ artifacts/*/results/anomalies/*.png
 artifacts/*/results/_*
 artifacts/*/*.zip
 
+# ── AdaIN 支线产物（issue #32）：IR、出图、报告都不入库 ──
+artifacts/adain/
+
 # ── 编辑器 / 系统 ──
 .vscode/
 .idea/

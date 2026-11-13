@@ -277,6 +277,7 @@ async function init() {
   bindInfoNotes();
   bindLayerTools();
   bindPairSelect();
+  bindStylize();
   HISTORY = loadHistory();
   renderHistory();
 
@@ -422,7 +423,7 @@ function bindTabs() {
   });
   // 支持 ?/# 直达某一页
   const name = (location.hash || '').replace('#', '');
-  if (['demo', 'perf', 'quality', 'plan'].includes(name)) activatePanel(name, false);
+  if (['demo', 'perf', 'quality', 'plan', 'style'].includes(name)) activatePanel(name, false);
 }
 
 function activatePanel(name, focus = true) {
@@ -1509,6 +1510,198 @@ function renderHonesty() {
       el('span', {}, [el('b', { text: title + '：' }), text]),
     ]));
   });
+}
+
+/* ══════════ 05 风格化（AdaIN 支线，issue #32） ══════════ */
+
+const STY = { state: null, content: null, style: null, alpha: 1, backend: 'torch' };
+
+async function loadStylize() {
+  try {
+    const r = await fetch('/api/stylize/state');
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || '加载失败');
+    STY.state = j.state;
+    // 支持 ?content=…&style=…&alpha=…&backend=… 直接复现一次（便于分享/截图）
+    const q = new URLSearchParams(location.search);
+    if (q.get('sc')) STY.content = q.get('sc');
+    if (q.get('sr')) STY.style = q.get('sr');
+    if (q.get('sa')) STY.alpha = Number(q.get('sa'));
+    if (q.get('sb')) STY.backend = q.get('sb');
+    renderStylize();
+    if (q.get('sc') && q.get('sr')) {
+      $('alphaRange').value = String(STY.alpha);
+      $('alphaOut').textContent = STY.alpha.toFixed(2);
+      runStylize();
+    }
+  } catch (e) {
+    STY.state = null;
+    setStyleNote(`支线不可用：${e.message || e}`, true);
+  }
+}
+
+function renderStylize() {
+  const s = STY.state;
+  if (!s) return;
+
+  const ready = !!s.ready;
+  if (!ready) {
+    setStyleNote(s.message || '支线未就绪', true);
+    setStyleBadge('未就绪');
+  }
+
+  const cbox = $('styleContents');
+  cbox.innerHTML = '';
+  (s.contents || []).forEach((c) => {
+    const active = STY.content === c.id;
+    cbox.append(el('button', {
+      class: 'samp' + (active ? ' is-active' : ''),
+      role: 'radio',
+      'aria-checked': active ? 'true' : 'false',
+      title: c.id,
+      onclick: () => { STY.content = c.id; STY.contentSource = c.source || 'samples'; renderStylize(); },
+    }, [el('img', { src: c.url, alt: c.id, loading: 'lazy' })]));
+  });
+  if (!(s.contents || []).length) {
+    cbox.append(el('p', { class: 'hint', text: '没有可用内容图：先跑主线的 setup' }));
+  }
+
+  const rbox = $('styleRefs');
+  rbox.innerHTML = '';
+  (s.styles || []).forEach((st) => {
+    const active = STY.style === st.id;
+    rbox.append(el('button', {
+      class: 'samp' + (active ? ' is-active' : ''),
+      role: 'radio',
+      'aria-checked': active ? 'true' : 'false',
+      title: st.name,
+      onclick: () => { STY.style = st.id; renderStylize(); },
+    }, [el('img', { src: st.url, alt: st.name, loading: 'lazy' })]));
+  });
+  if (!(s.styles || []).length) {
+    rbox.append(el('p', {
+      class: 'hint',
+      text: '没有风格图：运行 python cli.py stylize fetch-samples',
+    }));
+  }
+
+  const bbox = $('styleBackends');
+  bbox.innerHTML = '';
+  (s.backends || []).forEach((b) => {
+    const active = STY.backend === b.id;
+    bbox.append(el('button', {
+      class: 'seg' + (active ? ' active' : ''),
+      role: 'radio',
+      'aria-checked': active ? 'true' : 'false',
+      onclick: () => { STY.backend = b.id; renderStylize(); },
+    }, [el('b', { text: b.name })]));
+  });
+  if (!STY.backend || !(s.backends || []).some((b) => b.id === STY.backend)) {
+    STY.backend = (s.backends && s.backends[0]) ? s.backends[0].id : 'torch';
+  }
+
+  $('styleRunBtn').disabled = !(ready && STY.content && STY.style);
+}
+
+function setStyleNote(text, isError = false) {
+  const n = $('styleNote');
+  n.textContent = text || '';
+  n.classList.toggle('is-error', !!isError);
+}
+
+function setStyleBadge(text, cls) {
+  const b = $('styleBadge');
+  b.textContent = text;
+  b.className = 'badge' + (cls ? ' ' + cls : '');
+}
+
+async function runStylize() {
+  if (!STY.content || !STY.style) return;
+  const btn = $('styleRunBtn');
+  btn.disabled = true;
+  setStyleBadge('推理中', 'is-run');
+  setStyleNote('');
+
+  try {
+    const r = await fetch('/api/stylize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: { id: STY.content, source: STY.contentSource || 'samples' },
+        style: STY.style,
+        alpha: STY.alpha,
+        backend: STY.backend,
+      }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || '失败');
+
+    $('styleImgIn').src = j.content_url;
+    $('styleImgRef').src = j.style_url;
+    $('styleImgOut').src = j.output_url;
+    const img = $('styleImgOut');
+    const size = await new Promise((res) => {
+      if (img.complete && img.naturalWidth) return res(`${img.naturalWidth}×${img.naturalHeight}`);
+      img.onload = () => res(`${img.naturalWidth}×${img.naturalHeight}`);
+      return null;
+    });
+    $('styleStage').dataset.has = '1';
+    $('styleCapOut').textContent = `输出 · ${j.backend} · α=${j.alpha}`;
+    $('styleMeta').textContent = `${fmt(j.latency_ms, 1)} ms · ${fmt(j.fps, 1)} FPS · ${size}`;
+    setStyleBadge('完成', 'is-ok');
+  } catch (e) {
+    setStyleBadge('失败', 'is-bad');
+    setStyleNote(String(e.message || e), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function bindStylize() {
+  const range = $('alphaRange');
+  const out = $('alphaOut');
+  range.addEventListener('input', () => {
+    STY.alpha = Number(range.value);
+    out.textContent = STY.alpha.toFixed(2);
+  });
+  out.textContent = Number(range.value).toFixed(2);
+  STY.alpha = Number(range.value);
+
+  $('styleRunBtn').addEventListener('click', runStylize);
+
+  const input = $('styleFileInput');
+  input.addEventListener('change', async () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    setStyleNote('上传中…');
+    try {
+      const r = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: f,
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || '上传失败');
+      STY.content = j.id;
+      STY.contentSource = 'uploads';
+      const box = $('styleContents');
+      const btn = el('button', {
+        class: 'samp is-active',
+        role: 'radio',
+        'aria-checked': 'true',
+        title: '上传的图',
+        onclick: () => { STY.content = j.id; STY.contentSource = 'uploads'; renderStylize(); },
+      }, [el('img', { src: j.url, alt: '上传的图' })]);
+      box.prepend(btn);
+      renderStylize();
+      btn.classList.add('is-active');
+      setStyleNote('已上传，点「开始风格化」');
+    } catch (e) {
+      setStyleNote(String(e.message || e), true);
+    }
+  });
+
+  loadStylize();
 }
 
 /* ══════════ 口径说明折叠 ══════════ */

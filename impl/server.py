@@ -20,7 +20,15 @@ WEB = ROOT / "web"
 ART = ROOT / "artifacts"
 UPLOADS = ART / "uploads"
 
-ALLOWED_PREFIX = ("web", "artifacts")
+# AdaIN 支线（issue #32）：与主线口径隔离，产物只落 artifacts/adain/
+STYLIZE_DIR = ROOT / "stylize"
+STYLIZE_WEIGHTS = STYLIZE_DIR / "weights"
+STYLIZE_SAMPLES = STYLIZE_DIR / "samples"
+STY_ART = ART / "adain"
+STY_IR = STY_ART / "ir"
+STY_OUT = STY_ART / "out"
+
+ALLOWED_PREFIX = ("web", "artifacts", "stylize")
 
 _runtime = None
 _runtime_pair = None
@@ -31,6 +39,9 @@ _infer_lock = threading.Lock()
 # 四个 pair 全驻留会吃掉 1.5 GB 以上，所以只保留当前这一组，
 # 切 pair 时按需重编译（约 2–4 秒，仅切换时发生一次）。
 _MAX_RESIDENT = 1
+
+_sty_lock = threading.Lock()
+_sty_cache: dict = {}      # {"net": torch 模型, "ov": {标签: compiled}}
 
 
 def _pair_registry():
@@ -246,6 +257,121 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     ]
 
 
+# ---------- AdaIN 支线（issue #32） ----------
+
+def _find_img(base: Path, stem: str) -> Path | None:
+    """按 stem 在目录里找图（扩展名不定）。"""
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        p = base / f"{stem}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def _sty_weights_ready() -> tuple[bool, str]:
+    need = [STYLIZE_WEIGHTS / "vgg_normalised.pth", STYLIZE_WEIGHTS / "decoder.pth"]
+    miss = [p.name for p in need if not p.exists()]
+    if miss:
+        return False, ("缺少 AdaIN 权重：" + "、".join(miss)
+                       + "（运行 python cli.py stylize download）")
+    return True, ""
+
+
+def stylize_state() -> dict:
+    ok, msg = _sty_weights_ready()
+    styles = []
+    if STYLIZE_SAMPLES.exists():
+        for p in sorted(STYLIZE_SAMPLES.iterdir()):
+            if p.suffix.lower() in (".jpg", ".jpeg", ".png"):
+                styles.append({
+                    "id": p.stem,
+                    "name": p.stem.replace("_", " "),
+                    "url": f"/stylize/samples/{p.name}",
+                })
+    contents = []
+    if SAMPLES.exists():
+        exts = {".jpg", ".jpeg", ".png", ".webp"}
+        for p in sorted(SAMPLES.iterdir()):
+            if p.suffix.lower() in exts and not p.name.startswith("_"):
+                contents.append({
+                    "id": p.stem,
+                    "source": "samples",
+                    "url": f"/artifacts/samples/{p.name}",
+                })
+
+    backends = [{"id": "torch", "name": "PyTorch FP32"}]
+    if (STY_IR / "adain_256.xml").exists():
+        backends.append({"id": "ov", "name": "OpenVINO FP32"})
+    if (STY_IR / "adain_256_int8_skip_norm_ops.xml").exists():
+        backends.append({"id": "int8", "name": "OpenVINO INT8（排除归一化）"})
+
+    return {
+        "ready": ok,
+        "message": msg,
+        "styles": styles,
+        "contents": contents,
+        "backends": backends if ok else [],
+        "note": ("AdaIN 支线：换的是画风，不改内容语义；与主线 A/B/C 三组指标不并列比较。"
+                 "OV / INT8 后端固定 256 输入；PyTorch 后端保持原分辨率。"),
+    }
+
+
+def _sty_net():
+    """PyTorch 模型缓存（约 90 MB 权重，首次加载 ~1.5 s）。"""
+    if "net" not in _sty_cache:
+        from stylize.adain import load_stylizer
+        _sty_cache["net"] = load_stylizer()
+    return _sty_cache["net"]
+
+
+def _sty_ov(xml: Path):
+    key = f"ov:{xml.name}"
+    if key not in _sty_cache:
+        import openvino as ov
+        _sty_cache[key] = ov.Core().compile_model(
+            str(xml), "CPU", {"INFERENCE_PRECISION_HINT": "f32"})
+    return _sty_cache[key]
+
+
+def run_stylize(content_path: Path, style_path: Path, alpha: float,
+                backend: str, out_path: Path) -> float:
+    """跑一次风格迁移，返回耗时（ms）。backend ∈ torch / ov / int8。"""
+    import numpy as np
+    import torch
+    from PIL import Image
+    from stylize.adain import resize_style_to, to_image, to_tensor
+
+    content = Image.open(content_path).convert("RGB")
+    style = Image.open(style_path).convert("RGB")
+
+    t0 = time.perf_counter()
+    if backend == "torch":
+        net = _sty_net()
+        x = to_tensor(content)
+        s = resize_style_to(x, to_tensor(style))
+        with torch.no_grad():
+            out_img = to_image(net(x, s, float(alpha)))
+    else:
+        xml = STY_IR / ("adain_256.xml" if backend == "ov"
+                        else "adain_256_int8_skip_norm_ops.xml")
+        if not xml.exists():
+            raise FileNotFoundError(f"缺少 IR：{xml.name}（先跑 cli.py stylize convert）")
+        m = _sty_ov(xml)
+        x = to_tensor(content, 256)
+        s = resize_style_to(x, to_tensor(style, 256))
+        out = np.asarray(m({
+            "content": x.numpy(),
+            "style": s.numpy(),
+            "alpha": np.array([float(alpha)], dtype="float32"),
+        })[0])
+        out_img = to_image(torch.from_numpy(out))
+
+    ms = (time.perf_counter() - t0) * 1000
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_img.save(out_path)
+    return ms
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "ShiftLite/1.0"
@@ -303,7 +429,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._err(500, f"状态构建失败：{e}")
 
-        if path.startswith("/artifacts/") or path.startswith("/web/"):
+        if path == "/api/stylize/state":
+            try:
+                return self._json({"ok": True, "state": stylize_state()})
+            except Exception as e:
+                return self._err(500, f"支线状态构建失败：{e}")
+
+        if path.startswith("/artifacts/") or path.startswith("/web/") \
+                or path.startswith("/stylize/"):
             fp = self._safe_path(path)
             if not fp:
                 return self._err(404, "文件不存在")
@@ -320,6 +453,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_infer()
         if parsed.path == "/api/upload":
             return self._api_upload()
+        if parsed.path == "/api/stylize":
+            return self._api_stylize()
         return self._err(404, "路径不存在")
 
     # ---------- 文件 ----------
@@ -406,6 +541,64 @@ class Handler(BaseHTTPRequestHandler):
             })
         except Exception as e:
             return self._err(500, f"推理失败：{type(e).__name__}: {e}")
+
+    def _api_stylize(self):
+        ok, msg = _sty_weights_ready()
+        if not ok:
+            return self._err(409, msg)
+
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            if n > 32 * 1024 * 1024:
+                return self._err(413, "请求体过大")
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except Exception as e:
+            return self._err(400, f"请求解析失败：{e}")
+
+        content = req.get("content") or {}
+        cid = str(content.get("id", "")).strip()
+        csrc = content.get("source") or "samples"
+        sid = str(req.get("style", "")).strip()
+        backend = str(req.get("backend", "torch"))
+        try:
+            alpha = max(0.0, min(1.0, float(req.get("alpha", 1.0))))
+        except (TypeError, ValueError):
+            return self._err(400, "alpha 非法")
+
+        for label, val in (("内容图", cid), ("风格图", sid)):
+            if not re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", val):
+                return self._err(400, f"{label}参数非法")
+        if backend not in ("torch", "ov", "int8"):
+            return self._err(400, "backend 只能是 torch / ov / int8")
+        if csrc not in ("samples", "uploads"):
+            return self._err(400, "content.source 只能是 samples / uploads")
+
+        cbase = UPLOADS if csrc == "uploads" else SAMPLES
+        cpath = _find_img(cbase, cid)
+        if cpath is None:
+            return self._err(404, "找不到内容图")
+        spath = _find_img(STYLIZE_SAMPLES, sid)
+        if spath is None:
+            return self._err(404, "找不到风格图")
+
+        ts = int(time.time() * 1000)
+        out = STY_OUT / f"api_{cid}__{sid}_{ts}.png"
+        try:
+            with _sty_lock:
+                ms = run_stylize(cpath, spath, alpha, backend, out)
+        except Exception as e:
+            return self._err(500, f"风格化失败：{type(e).__name__}: {e}")
+
+        return self._json({
+            "ok": True,
+            "backend": backend,
+            "alpha": round(alpha, 2),
+            "latency_ms": round(ms, 2),
+            "fps": round(1000 / ms, 2) if ms else 0,
+            "content_url": f"/{cpath.relative_to(ROOT).as_posix()}",
+            "style_url": f"/{spath.relative_to(ROOT).as_posix()}",
+            "output_url": f"/{out.relative_to(ROOT).as_posix()}?t={ts}",
+        })
 
     def _api_upload(self):
         try:
