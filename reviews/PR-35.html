@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #35</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+  .warn { border-left: 3px solid #f5c518; background: rgba(245,197,24,.12); padding: .5rem .8rem; margin: .8rem 0; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明 — PR #35</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request, per <code>docs/AI_POLICY.md</code> and <code>AGENTS.md</code>. 本文件随 PR 提交，路径 <code>reviews/PR-35.html</code>。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>35</dd>
+  <dt>作者 / Author</dt><dd>WorkBuddy（AI 编码 Agent）产出，仓库 owner 合并 #33/#34 后由 Agent 自查发现缺陷</dd>
+  <dt>日期 / Date</dt><dd>2026-11-13</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash</dd>
+  <dt>关联 / Related</dt><dd>修复 #33 与 #34 合并后的集成缺陷；补 #34 遗漏章节</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 修掉 <code>main</code> 上两个**真实的集成缺陷**：#33（迁移对配置化）与 #34（AdaIN 支线）各自在独立分支验证通过，但合并后互相踩到——`cli.py` 的迁移对绑定与 `stylize` 子命令冲突，`server.py` 的支线接口引用了已被移除的全局 <code>SAMPLES</code>。同时补上 #34 因合并时序遗漏的选型章节。</p>
+<p class="en">This PR fixes two genuine integration defects on <code>main</code> that appeared only after #33 and #34 were merged together, and adds the selection-rationale section that #34 missed due to merge timing.</p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>impl/cli.py</code></td><td><code>select_pair(args.pair)</code> 改为仅在子命令声明了 <code>--pair</code> 时执行（<code>hasattr</code> 守卫）。/ Guard the pair binding.</td></tr>
+  <tr><td><code>impl/server.py</code></td><td>支线的 <code>stylize_state()</code> 与 <code>_api_stylize()</code> 改用 <code>get_pair(None).paths.samples</code>；内容图 URL 改为相对 <code>ROOT</code> 的真实路径。/ Resolve samples through the pair layer.</td></tr>
+  <tr><td><code>impl/stylize/README.md</code></td><td>新增 §五 三路线选型对比（AdaIN / MicroAST / Hist2Style）与引用纠错。/ Adds the three-way selection comparison.</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（AI 编码 Agent）· DeepSeek-V4.1-Flash。</li>
+  <li>参与范围 / Extent：两个缺陷的**发现**与修复均由 AI 完成。发现方式是合并后主动做冒烟测试，而不是等用户报错。<br><span class="en">Both defects were found and fixed by the agent through post-merge smoke testing, not reported by a human.</span></li>
+  <li>人工复核 / Human review：无人工逐行 review；仓库 owner 通过合并本 PR 表示接受。<br><span class="en">No line-by-line human review; acceptance is expressed by merging.</span></li>
+  <li>需要说明的失误 / Mistakes worth disclosing：<br>
+    (a) 我在 #34 的自测里只跑了 <code>cli.py stylize …</code>（当时分支上还没有 #33 的 <code>select_pair</code>），**没有测「合并后」的组合**，所以漏掉了这个崩溃；<br>
+    (b) #34 的自测只验证了支线接口，没有回归主线接口，同理漏掉了 <code>SAMPLES</code> 问题；<br>
+    (c) 合并后一度以为「#33 被挂起了」，实际 owner 已把它合并——我按旧状态判断，晚了一步发现缺陷。<br>
+    <span class="en">The agent tested each branch in isolation but not the merged combination, which is exactly why both defects slipped through.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>本机 <strong>AMD Ryzen 7 7745HX</strong>，在 <code>main</code>（73a3b77）之上修复后实测。<span class="en">Verified on top of <code>main</code> at 73a3b77.</span></p>
+
+<table>
+  <tr><th>验证项 / Item</th><th>修前 / Before</th><th>修后 / After</th></tr>
+  <tr><td><code>cli.py stylize bench --help</code></td><td>AttributeError: 'Namespace' object has no attribute 'pair'</td><td>正常打印 run.py 用法</td></tr>
+  <tr><td><code>cli.py stylize poc --alpha 0.7</code></td><td>同上崩溃</td><td>267.2 ms，正常出图</td></tr>
+  <tr><td><code>cli.py bench --help | grep -- --pair</code></td><td>2 处（正常）</td><td>2 处（未受影响）</td></tr>
+  <tr><td><code>GET /api/stylize/state</code></td><td>500 <code>name 'SAMPLES' is not defined</code></td><td>ready=True，3 风格图 / 3 后端</td></tr>
+  <tr><td><code>POST /api/stylize</code>（int8）</td><td>500</td><td>ok=True，675 ms，输出落盘</td></tr>
+  <tr><td><code>GET /api/state?pair=horse2zebra</code></td><td>正常</td><td>正常（pair 与 groups 均正确）</td></tr>
+  <tr><td><code>py_compile</code></td><td>—</td><td>cli.py / server.py / core/pairs.py / stylize/*.py 全部通过</td></tr>
+</table>
+
+<div class="warn">
+<strong>流程教训 / Process lesson：</strong>两个 PR 的 CI 都过，不代表合起来能跑。本仓库目前没有跨模块集成测试，建议给 <code>main</code> 加一条冒烟检查（起服务 + 打三类接口 + 跑一次 CLI）。本 PR 没有加 CI，只做了人工冒烟，因为加 CI 涉及工作流改动，宜单独提。<br>
+<span class="en">Green CI on two branches does not imply the merge works. A smoke-test workflow is recommended as a separate PR.</span>
+</div>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<ol>
+  <li><strong>改动保守</strong>：<code>hasattr</code> 守卫与路径来源替换都不改变既有调用约定；未动任何指标口径。<span class="en">Both changes are conservative and do not alter any calling convention.</span></li>
+  <li><strong>未覆盖的回归面</strong>：只做了冒烟级验证（CLI 两入口 + 三类接口），没有跑完整 <code>bench</code>/<code>quality</code>（耗时且与本次改动无关）。<span class="en">Smoke-level only; full bench/quality not re-run.</span></li>
+  <li><strong>同类风险仍在</strong>：后续若再有「新增子命令但不带 <code>--pair</code>」或「新增接口仍用旧全局」的改动，会重复这两个问题——建议在 <code>AGENTS.md</code> 里补一条「合并后必须做冒烟」的约定。<span class="en">The same class of bug can recur; a post-merge smoke-test convention is advisable.</span></li>
+</ol>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox" checked> 两处修复都针对合并引入的缺陷，不是新功能 / Both fixes target merge-induced defects</li>
+  <li><input type="checkbox" checked> <code>--pair</code> 子命令的路径绑定行为未被削弱 / Pair binding still works where declared</li>
+  <li><input type="checkbox" checked> 支线接口改为 pair 派生路径后，默认 pair 的 URL 仍正确 / URLs still resolve for the default pair</li>
+  <li><input type="checkbox"> 是否同意后续单独提一个「main 冒烟 CI」/ Agree to add a smoke-test workflow separately</li>
+</ul>
+</body>
+</html>
