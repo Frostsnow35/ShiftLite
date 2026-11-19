@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #36</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明</span></h1>
+<p class="en">Bilingual reviewer note for AI-assisted pull request PR #36. / AI 参与的 PR 必须随 PR 提交本说明（路径 <code>reviews/PR-36.html</code>）。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>36</dd>
+  <dt>作者 / Author</dt><dd>dino5478</dd>
+  <dt>日期 / Date</dt><dd>2026-11-20</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>opencode / deepseek-flash</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 补齐 #17 失真四类归档、#19 E4 层间判读、#15 主观问卷材料、#25 期末叙事，并附 #20 官方复核总清单。仅新增分析脚本与文档，不改动模型、训练、量化或既有质量数值。<br>
+<span class="en">This PR adds the #17 four-class distortion audit, the #19 E4 layer interpretation, the #15 subjective questionnaire materials, and the #25 final-report narrative, plus the #20 official review checklist. It only adds analysis scripts and docs; model, training, quantization and existing quality numbers are unchanged.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>impl/tools/anomaly_audit.py</code></td><td>四类失真归档 + 固有/量化分离 + 层漂移对照（#17）</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/anomaly_audit/*</code></td><td>审计产物：14 条失真、5 条 X 侧失败单列、76 条多实例不计</td></tr>
+  <tr><td><code>docs/layer_style_structure_E4.md</code> + <code>impl/README.md §5.4.1</code></td><td>层序号 × 风格/结构判读（#19）</td></tr>
+  <tr><td><code>impl/tools/build_blind_pairs.py</code> + <code>docs/experiments/questionnaire_T1/*</code></td><td>30 对盲评材料、rubric、模板、答案键（#15；图片本地生成不入库）</td></tr>
+  <tr><td><code>docs/FINAL_REPORT_NARRATIVE.md</code></td><td>期末报告/视频/答辩叙事（#25）</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/official_checklist*.{csv,md}</code></td><td>#20 官方复核总清单（95 行）</td></tr>
+  <tr><td><code>.gitignore</code></td><td>忽略 cache、备份、本地复核与问卷图片</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：opencode，模型 deepseek-flash。</li>
+  <li>参与范围 / Extent：AI 生成了 <code>impl/tools/anomaly_audit.py</code>、<code>impl/tools/build_blind_pairs.py</code>、<code>docs/layer_style_structure_E4.md</code>、<code>docs/FINAL_REPORT_NARRATIVE.md</code>、<code>impl/README.md</code> 的两个小节，以及问卷与清单的表格文本；数据来源与阈值口径由人工给定。</li>
+  <li>人工复核 / Human review：作者将逐项核对脚本与文档、运行脚本并抽查产物；合并前需完成人工复核。<span class="en">The author will review the scripts/docs, run them, and spot-check outputs before merge.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>已执行并验证：<br>
+<code>python tools/anomaly_audit.py ...</code> → <code>OK records=14 input_detect=5 multi=76</code>，<code>anomalies_labeled.json</code> 可解析、计数一致；<br>
+<code>python tools/build_blind_pairs.py ... --n 30 --seed 20261120</code> → 30 对、60 张图、<code>blind_pairs.csv</code>/<code>answer_key.csv</code>/<code>subjective_template.csv</code> 已生成；<br>
+JSON/CSV 结构与字段已抽查。<br>
+<span class="en">Scripts were run and outputs parsed; counts and schemas were spot-checked. No unit tests are added in this PR.</span></p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<ul>
+  <li>#17：逐图 ssim/LPIPS 来自主表（i5，v1），检测来自 2026-11-09（7940HX），属跨批次；证据列已如实标注，不混作同一统计。</li>
+  <li>#15：盲评图来自本机 2026-11-19 质量运行，非官方 2026-11-09；<code>pairs/</code> 不入库，需随问卷包分发或本地重生成。</li>
+  <li>#20：人工复核仍有 85 张 pending；#15 仍需 4 名真人打分。机器预标注不代替人工结论。</li>
+</ul>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox"> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox"> 测试通过 / Tests pass</li>
+  <li><input type="checkbox"> AI 产出已人工复核 / AI output manually verified</li>
+</ul>
+</body>
+</html>
