@@ -14,3 +14,12 @@ venv/
 # 开题报告（交付物，仅本地保留，不入库）
 docs/开题报告.docx
 docs/开题报告.pdf
+
+# local-only (ShiftLite)
+cache/
+human-review/
+impl/artifacts/results_backup_*/
+impl/artifacts/figures_backup_*/
+impl/artifacts/results/review_20261119/
+impl/artifacts/results/structure_review/
+docs/experiments/questionnaire_T1/pairs/
