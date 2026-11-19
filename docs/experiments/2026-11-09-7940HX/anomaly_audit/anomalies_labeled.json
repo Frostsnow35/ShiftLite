@@ -1,0 +1,613 @@
+{
+  "meta": {
+    "schema": "anomaly-audit-v1",
+    "classes": [
+      "形变",
+      "位置偏移",
+      "背景改写",
+      "结构异常"
+    ],
+    "note": "机器预标注，不代替人工结论；X 侧检测失败与多实例候选不计为生成失真。",
+    "inputs": {
+      "review_queue": "..\\human-review\\human-review\\review_queue.json",
+      "human_review": "..\\human-review\\human-review\\human_review.csv",
+      "quality": "artifacts\\results\\quality.json",
+      "layers": "artifacts\\results\\layers.json"
+    },
+    "counts": {
+      "records": 14,
+      "by_source": {
+        "baseline_inherent": 10,
+        "quantization_introduced": 1,
+        "quantization_aggravated": 9
+      },
+      "by_class": {
+        "形变": 6,
+        "位置偏移": 3,
+        "背景改写": 12,
+        "结构异常": 11
+      },
+      "input_detection_failures": 5,
+      "multi_instance_only": 76
+    },
+    "layers": {
+      "resblock_head_to_tail": [
+        0.99937362,
+        0.96436821
+      ],
+      "most_drifted": [
+        "resblock_09",
+        0.96436821
+      ],
+      "least_drifted": [
+        "down_relu_2",
+        0.99963269
+      ],
+      "monotonic": true
+    }
+  },
+  "records": [
+    {
+      "sample": "n02381460_1090",
+      "classes": [
+        "结构异常"
+      ],
+      "source": [
+        "baseline_inherent"
+      ],
+      "human_status": "needs_discussion",
+      "human_conclusion": "X/C主体及掩码对应；A/B/C第二只动物无法确认；X到A路面和界面明显模糊；C相对A/B无可辨认明显变化",
+      "human_notes": "人工来源：本对话用户；复核人署名待补。用户观察：X镜中清晰可见并可辨认轮廓的2只栗色马；A/B/C各可看出1只斑马轮廓，另外1只均不确定。X和C选中对应的同一只动物，主体和掩码对应。X到A路面和界面明显模糊，A/B/C区别不大；C相比A/B变化不大，无法辨认。未将另一只动物判定为消失，也未将检测失败直接判定为生成失败。第二只动物情况保留待讨论。",
+      "failed_sides": [
+        "A",
+        "B"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure",
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "生成侧失败:A,B; 原因:below_score_threshold; X→C 中心偏移比=0.047; 面积比=0.98; edge_ssim_bc=0.784; LPIPS_bc=0.119; ssim_bc=0.897",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）"
+      ],
+      "comparison_file": "n02381460_1090.png"
+    },
+    {
+      "sample": "n02381460_1100",
+      "classes": [
+        "位置偏移",
+        "结构异常"
+      ],
+      "source": [
+        "quantization_introduced"
+      ],
+      "human_status": "pending",
+      "human_conclusion": "",
+      "human_notes": "",
+      "failed_sides": [
+        "X",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "C"
+      ],
+      "x_failed": true,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:C; 原因:below_score_threshold; mask_iou_ac=0.728; edge_ssim_bc=0.835; background_ssim_ac=0.924; LPIPS_bc=0.083; ssim_bc=0.914",
+      "layer_ref": [
+        "down_relu_1..3 + mask（浅层结构/位置）",
+        "down_relu_1..3（浅层结构/位置）"
+      ],
+      "comparison_file": "n02381460_1100.png"
+    },
+    {
+      "sample": "n02381460_1260",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "主体与头部口鼻轮廓基本保持；X/C掩码对应；有条纹但人工认为仍更像原来的栗色马；背景及A/B/C之间无明显变化",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C均能辨认动物主体，头部和口鼻轮廓基本保持；X和C的掩码对应同一只动物。条纹主要在动物身上，在A/B/C之间变化不明显。用户主观认为生成图仍更像原来的栗色马，不认为已明确呈现斑马外观；未据此作真实物种鉴定，也未将A/B的低置信度直接归为检测漏检。背景变化不明显，C相比A/B看不出明显区别。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B; 原因:below_score_threshold; X→C 中心偏移比=0.001; 面积比=0.99; edge_ssim_bc=0.880; LPIPS_bc=0.050; ssim_bc=0.937",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_1260.png"
+    },
+    {
+      "sample": "n02381460_1350",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "主体轮廓和位置基本保持；整体仍更像原来的黑马，斑马条纹不明显；X/C掩码对应；背景纹理变化；A/B/C之间无明显区别",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C都能辨认动物主体，轮廓和位置基本保持；用户认为整体仍更像原来的黑马，斑马条纹不明显。X和C掩码对应同一只动物。背景树木和地面的纹理有变化，A/B/C之间看不出明显区别。未将检测器的斑马标签作为迁移成功的人工结论，也未将A/B检测失败直接判定为漏检。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B; 原因:below_score_threshold; X→C 中心偏移比=0.013; 面积比=0.99; edge_ssim_bc=0.875; LPIPS_bc=0.053; ssim_bc=0.936",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_1350.png"
+    },
+    {
+      "sample": "n02381460_1540",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "needs_discussion",
+      "human_conclusion": "动物群位置基本保持；目标太小，斑马条纹无法判断；A/B/C均有天空左上方异常条纹及地面纹理变化；C天空颗粒感更明显",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C中的动物群位置基本保持，但动物太小，看不清是否有斑马条纹。天空左上方出现明显异常条纹，地面纹理也有变化，A/B/C均存在；C的天空颗粒感更明显。动物外观仍无法确认，保留待讨论；未把检测失败直接判定为动物消失或检测漏检。记录为可见现象，不额外推断具体层级或算法因果。",
+      "failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure",
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:no_target_detection; edge_ssim_bc=0.731; LPIPS_bc=0.162; ssim_bc=0.846",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_1540.png"
+    },
+    {
+      "sample": "n02381460_1660",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "主体轮廓基本保持；整体仍更像原来的栗色马，斑马特征极不明显；身体和脸部有不自然纹理；背景明显变亮；C颗粒感稍明显",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C都能辨认动物主体，轮廓基本保持；用户认为整体仍更像原来的栗色马，身体和脸上有一些不自然的纹理，斑马特征极不明显。背景明显变亮，C的颗粒感稍明显。未将检测失败直接归为检测漏检或动物消失，未额外推断具体算法或层级因果。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:no_target_detection; edge_ssim_bc=0.816; LPIPS_bc=0.085; ssim_bc=0.900",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_1660.png"
+    },
+    {
+      "sample": "n02381460_1750",
+      "classes": [
+        "形变",
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "主体较小但可辨认，轮廓基本保持；更像黑马变为略有条纹的栗色马，略有斑马特征；身体纹理不自然及马周边图像扭曲；背景颗粒感明显增强；X/C对应同一只动物",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C都能辨认动物主体，但主体太小，轮廓基本保持；整体偏向黑马变成略有条纹的栗色马，身体上有一些不自然的纹理，马周边图像扭曲，斑马特征略有。背景颗粒感明显增强。用户确认X/C是同一只动物，未进一步评价掩码边界精度；未单独给出C相对A/B的差异结论，不将背景颗粒感增强归为C独有。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B; 原因:below_score_threshold; X→C 中心偏移比=0.034; 面积比=1.15; edge_ssim_bc=0.670; LPIPS_bc=0.178; ssim_bc=0.847",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_1750.png"
+    },
+    {
+      "sample": "n02381460_200",
+      "classes": [
+        "形变",
+        "背景改写"
+      ],
+      "source": [
+        "quantization_aggravated"
+      ],
+      "human_status": "pending",
+      "human_conclusion": "",
+      "human_notes": "",
+      "failed_sides": [],
+      "gen_failed_sides": [],
+      "x_failed": false,
+      "reasons": [
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "X→C 中心偏移比=0.137; 面积比=1.60; mask_iou_ac=0.882; edge_ssim_bc=0.605; background_ssim_ac=0.770; LPIPS_bc=0.191; ssim_bc=0.768",
+      "layer_ref": [
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_200.png"
+    },
+    {
+      "sample": "n02381460_3010",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "needs_discussion",
+      "human_conclusion": "动物剪影及位置基本保持；目标太小且仅见暗色轮廓，无法判断马或斑马外观；天空云层纹理明显变化；用户观察山脊边缘不自然纹理从A到B到C逐步加重；C天空颗粒感比A/B更明显",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C中的动物剪影和位置基本保持，但太小，无法判断斑马条纹；在该场景下只能看出马的暗色轮廓，不能确定是栗色马还是斑马。天空和云层纹理变化明显；用户观察山脊边缘有不自然纹理，并从A到B到C逐步加重；C的天空颗粒感比A/B更明显。外观类别保留无法确认，状态为已查看且有待讨论项。变化趋势属于用户视觉观察，未额外推断具体算法或层级因果，未将检测失败直接判为动物消失。",
+      "failed_sides": [
+        "X",
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": true,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:no_target_detection; edge_ssim_bc=0.754; LPIPS_bc=0.139; ssim_bc=0.835",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_3010.png"
+    },
+    {
+      "sample": "n02381460_3120",
+      "classes": [
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "遮挡主体及位置基本保持；整体仍更像原来的马，斑马条纹不明显；树干地面纹理明显变化，动物与树干交界有些混乱；A/B/C无明显区别；C无有效掩码，X/C对应无法比较",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C中被树干遮挡的动物主体和位置基本保持，整体仍更像原来的马，斑马条纹不明显；树干和地面纹理变化明显，动物与树干交界处有些混乱，A/B/C之间看不出明显区别。用户表述：X和C红色区块对应不一致，C中未识别到标红色块。结合C无有效掩码的机器记录，将该项规范记为X有红色掩码而C缺失，无法比较两侧掩码对应；不记为已证实选中不同主体。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:no_target_detection; edge_ssim_bc=0.888; LPIPS_bc=0.040; ssim_bc=0.945",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_3120.png"
+    },
+    {
+      "sample": "n02381460_440",
+      "classes": [
+        "形变",
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "位置和抬腿姿态基本保持；身体有条纹但整体仍更像原来的马；A/B/C均有天空左上方异常条纹及云层纹理变化；C颗粒感更明显",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C中动物的位置和抬腿姿态基本保持，身体有条纹但整体仍更像原来的马。天空左上方有明显异常条纹，云层纹理也有变化，A/B/C均存在，C的颗粒感更明显。未将身体出现条纹直接判为迁移成功，未额外推断具体算法或层级因果。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:no_target_detection; edge_ssim_bc=0.698; LPIPS_bc=0.141; ssim_bc=0.824",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_440.png"
+    },
+    {
+      "sample": "n02381460_7170",
+      "classes": [
+        "位置偏移",
+        "形变",
+        "背景改写"
+      ],
+      "source": [
+        "quantization_aggravated"
+      ],
+      "human_status": "pending",
+      "human_conclusion": "",
+      "human_notes": "",
+      "failed_sides": [],
+      "gen_failed_sides": [],
+      "x_failed": false,
+      "reasons": [
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "X→C 中心偏移比=0.461; 面积比=3.66; mask_iou_ac=0.864; edge_ssim_bc=0.554; background_ssim_ac=0.751; LPIPS_bc=0.299; ssim_bc=0.747",
+      "layer_ref": [
+        "down_relu_1..3 + mask（浅层结构/位置）",
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_7170.png"
+    },
+    {
+      "sample": "n02381460_7190",
+      "classes": [
+        "位置偏移",
+        "形变",
+        "背景改写"
+      ],
+      "source": [
+        "quantization_aggravated"
+      ],
+      "human_status": "pending",
+      "human_conclusion": "",
+      "human_notes": "",
+      "failed_sides": [],
+      "gen_failed_sides": [],
+      "x_failed": false,
+      "reasons": [
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "X→C 中心偏移比=1.444; 面积比=1.09; mask_iou_ac=0.919; edge_ssim_bc=0.668; background_ssim_ac=0.799; LPIPS_bc=0.162; ssim_bc=0.799",
+      "layer_ref": [
+        "down_relu_1..3 + mask（浅层结构/位置）",
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_7190.png"
+    },
+    {
+      "sample": "n02381460_7250",
+      "classes": [
+        "形变",
+        "结构异常",
+        "背景改写"
+      ],
+      "source": [
+        "baseline_inherent",
+        "quantization_aggravated"
+      ],
+      "human_status": "reviewed",
+      "human_conclusion": "动物位置和姿态基本保持；身上有些条纹但仍更像马，略有斑马特征；山坡植被纹理明显变化；C天空颗粒感比A/B更明显",
+      "human_notes": "人工来源：本对话用户；按用户要求署名留空。A/B/C中动物的位置和姿态基本保持，身上有些条纹但仍更像马，略有斑马特征；山坡植被纹理变化明显，C的天空颗粒感比A/B更明显。未将出现条纹直接判为迁移成功，未额外推断具体算法或层级因果。reviewed仅表示已查看并记录，不表示迁移质量合格。",
+      "failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "gen_failed_sides": [
+        "A",
+        "B",
+        "C"
+      ],
+      "x_failed": false,
+      "reasons": [
+        "detection_failure",
+        "multiple_instances_correspondence_unverified"
+      ],
+      "evidence": "生成侧失败:A,B,C; 原因:below_score_threshold,no_target_detection; edge_ssim_bc=0.678; LPIPS_bc=0.190; ssim_bc=0.862",
+      "layer_ref": [
+        "down_relu_1..3（浅层结构/位置）",
+        "resblock_06..09（深层残差，风格/结构）",
+        "up_relu_1..2 + head_conv（解码，纹理/背景）"
+      ],
+      "comparison_file": "n02381460_7250.png"
+    }
+  ],
+  "input_detection_failures": [
+    {
+      "sample": "n02381460_1120",
+      "reasons": [
+        "detection_failure",
+        "multiple_instances_correspondence_unverified"
+      ],
+      "comparison_file": "n02381460_1120.png"
+    },
+    {
+      "sample": "n02381460_2890",
+      "reasons": [
+        "detection_failure"
+      ],
+      "comparison_file": "n02381460_2890.png"
+    },
+    {
+      "sample": "n02381460_3240",
+      "reasons": [
+        "detection_failure"
+      ],
+      "comparison_file": "n02381460_3240.png"
+    },
+    {
+      "sample": "n02381460_4450",
+      "reasons": [
+        "detection_failure"
+      ],
+      "comparison_file": "n02381460_4450.png"
+    },
+    {
+      "sample": "n02381460_4660",
+      "reasons": [
+        "detection_failure",
+        "multiple_instances_correspondence_unverified"
+      ],
+      "comparison_file": "n02381460_4660.png"
+    }
+  ],
+  "multi_instance_candidates": [
+    "n02381460_1000",
+    "n02381460_1010",
+    "n02381460_1030",
+    "n02381460_1110",
+    "n02381460_1160",
+    "n02381460_120",
+    "n02381460_1210",
+    "n02381460_1360",
+    "n02381460_140",
+    "n02381460_1620",
+    "n02381460_1630",
+    "n02381460_1690",
+    "n02381460_1740",
+    "n02381460_180",
+    "n02381460_1820",
+    "n02381460_1830",
+    "n02381460_1920",
+    "n02381460_20",
+    "n02381460_2120",
+    "n02381460_2280",
+    "n02381460_2460",
+    "n02381460_2540",
+    "n02381460_2650",
+    "n02381460_2870",
+    "n02381460_2950",
+    "n02381460_3110",
+    "n02381460_3330",
+    "n02381460_360",
+    "n02381460_3660",
+    "n02381460_3910",
+    "n02381460_40",
+    "n02381460_4010",
+    "n02381460_4110",
+    "n02381460_4120",
+    "n02381460_4160",
+    "n02381460_4240",
+    "n02381460_4310",
+    "n02381460_4370",
+    "n02381460_4410",
+    "n02381460_4420",
+    "n02381460_4470",
+    "n02381460_4550",
+    "n02381460_4630",
+    "n02381460_4650",
+    "n02381460_470",
+    "n02381460_4740",
+    "n02381460_4790",
+    "n02381460_4800",
+    "n02381460_490",
+    "n02381460_50",
+    "n02381460_500",
+    "n02381460_5500",
+    "n02381460_5670",
+    "n02381460_5940",
+    "n02381460_6290",
+    "n02381460_6300",
+    "n02381460_640",
+    "n02381460_6640",
+    "n02381460_6690",
+    "n02381460_670",
+    "n02381460_6790",
+    "n02381460_690",
+    "n02381460_6950",
+    "n02381460_7140",
+    "n02381460_7620",
+    "n02381460_7660",
+    "n02381460_7700",
+    "n02381460_7890",
+    "n02381460_7970",
+    "n02381460_800",
+    "n02381460_840",
+    "n02381460_8900",
+    "n02381460_8980",
+    "n02381460_900",
+    "n02381460_9240",
+    "n02381460_9260"
+  ]
+}
