@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Python,
     [string]$RunRoot,
     [string]$TorchHome,
@@ -34,6 +34,13 @@ foreach ($name in @('core', 'web', 'tests')) {
     Get-ChildItem -LiteralPath (Join-Path $source $name) -File | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path (Join-Path $target $name) $_.Name)
     }
+}
+New-Item -ItemType Directory -Path (Join-Path $target 'pairs') -Force | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $source 'pairs') -File -Filter '*.json' |
+    Copy-Item -Destination (Join-Path $target 'pairs')
+New-Item -ItemType Directory -Path (Join-Path $target 'stylize') -Force | Out-Null
+foreach ($name in @('run.py', 'adain.py', 'README.md')) {
+    Copy-Item -LiteralPath (Join-Path $source "stylize/$name") -Destination (Join-Path $target 'stylize')
 }
 foreach ($name in @('cli.py', 'server.py', 'README.md', 'requirements.txt', 'requirements-cpu-win-py312.lock.txt')) {
     Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $target $name)

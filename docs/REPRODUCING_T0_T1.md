@@ -22,6 +22,16 @@ CPU 应出现在 OpenVINO 设备列表中。torch CUDA 为 None 是预期结果�
 
 下面从实际仓库位置计算目录，不要求 D 盘或特定用户名。该脚本是 PowerShell 入口；Linux/macOS 可在自行准备的独立源码副本内直接调用同一 Python CLI，但本轮没有验证这些平台。
 
+Windows PowerShell 5.1 使用带 UTF-8 BOM 的启动脚本。在仓库根目录执行下列命令可单独检查文件解析。若出现 `PSSecurityException`，用 `Get-ExecutionPolicy -List` 查看各级策略。对本地可信仓库，可用 `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned` 启动仅对该进程生效的会话，在新窗口重新设置 `$py`。组织组策略优先。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$parseErrors = $null
+[void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\impl\run-local.ps1).Path, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count) { throw ($parseErrors -join [Environment]::NewLine) }
+```
+
 ```powershell
 $repo = (Get-Location).Path
 $run = Join-Path (Split-Path -Parent $repo) ((Split-Path -Leaf $repo) + '-runs\local')
@@ -32,7 +42,9 @@ if ($LASTEXITCODE -ne 0) { throw 'setup 失败，先检查输出，勿继续宣�
 
 脚本仅复制源码，不复制仓库历史 artifacts。实际模型、数据、结果位于 `$run/impl/artifacts`。默认运行目录也可省略；有现成解释器时用 `-Python` 指向它。每次调用应使用相同的 RunRoot，避免看错实验。停止正在运行的服务后再同步代码，不要在质量评测中同步。
 
-setup 完成后检查：`models/convert_report.json` 中 pass=true、same_shape=true；真实图转换误差均值≤0.5、最大≤5 灰度级。`calib/manifest.json` 应有 300 张，`eval/manifest.json` 应有 testA=120、testB=140。默认排除 MVN；正式实验不要加 `--keep-instance-norm`，也不要擅自切换精度控制量化。
+启动器同步 `pairs/*.json` 和 AdaIN 程序。每次验证新版本都选一个新 RunRoot，在同一轮实验中复用它。11 月 9 日及 11 日的历史运行目录用于查阅当时的结果。
+
+setup 完成后检查 `models/convert_report.json` 中 pass=true、same_shape=true，真实图转换误差均值≤0.5、最大≤5 灰度级。默认校准集为 trainA 300 张，默认排除 MVN。当前 `eval/manifest.json` 按角色记录来源与实际写入数，图片位于 `eval/input`、`eval/ref`。默认对的 `input.from/written` 为 testA / 120，`ref.from/written` 为 testB / 140。反向 zebra2horse 的这两组值为 testB / 140、testA / 120，对应清单位于 `artifacts/zebra2horse/eval/`。旧归档保留原字段。
 
 ## 3 启动与测试
 
@@ -55,6 +67,26 @@ git diff --check
 ```
 
 Node 只用于前端契约/语法检查，Web 服务运行无需 Node。测试和运行的 Python 应一致。
+
+### AdaIN 联调
+
+**第一档：入口和无权重响应。** 在新的 RunRoot 中把 `@('stylize','bench','--help')` 传给启动脚本，检查输出含 `--size`。进入该副本的 impl，执行 `& $py -B -c 'import stylize.adain'`。启动 serve 后，GET `/api/stylize/state` 应返回 HTTP 200 和 `state.ready=false`。用下面的 JSON 请求 POST `/api/stylize` 应返回 HTTP 409，响应说明缺少权重。
+
+```json
+{"content":{"id":"horse_01","source":"samples"},"style":"la_muse","alpha":0.8,"backend":"int8"}
+```
+
+**第二档：真实 INT8 出图。** 停止服务。使用已完成默认对 setup 的同一运行副本，确认 `artifacts/samples/horse_01.png` 存在。在仓库根目录运行：
+
+```powershell
+foreach ($step in @('download', 'fetch-samples', 'quantize --size 256 --exclude-norm')) {
+    $argv = @('stylize') + $step.Split(' ')
+    & .\impl\run-local.ps1 -Python $py -RunRoot $run -TorchHome $cache -CliArgs $argv
+    if ($LASTEXITCODE -ne 0) { throw "AdaIN 步骤失败 $step" }
+}
+```
+
+在运行副本的 impl 下核对 `stylize/weights/{vgg_normalised,decoder}.pth`、`stylize/samples/la_muse.jpg` 及 `artifacts/adain/quantize_report_256.json` 中的 `variants.skip_norm_ops`。该变体成功时应有 `artifacts/adain/ir/adain_256_int8_skip_norm_ops.xml` 和同名 .bin。重启服务，确认 `state.ready=true` 且 `state.backends` 含 int8，然后发送同一个 POST。验收以 HTTP 200、`ok=true`、`backend=int8` 且能从 `output_url` 读取并解码生成图片为准。
 
 ## 4 正式实验与表格
 

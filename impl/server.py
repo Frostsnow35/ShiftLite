@@ -178,16 +178,15 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
-    deep_layer = layers if layers is not None else _read_json(ART / "results" / "layers.json")
     quality = quality or {}
     q_deep = quality.get("deep") or {}
     q_real = quality.get("metrics_source") == "real"
 
     def layers_note():
-        if not deep_layer:
+        if not layers:
             return "未开始：需跑 python cli.py layers"
         # 逐层漂移可能落在噪声水平内，如实报道这一情形
-        summary = deep_layer.get("summary", {})
+        summary = layers.get("summary", {})
         worst = summary.get("most_drifted_layer")
         cos = summary.get("most_drifted_cosine")
         monotone = summary.get("drift_monotonic_along_depth")
@@ -248,7 +247,7 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
          "note": quality_note()},
         {"code": "E4", "title": "层间分工分析（逐层表示漂移）",
          "half": "阶段二",
-         "status": st(bool(deep_layer)),
+         "status": st(bool(layers)),
          "note": layers_note()},
         {"code": "E5", "title": "训练复现（独立于主对照）",
          "half": "阶段三",
