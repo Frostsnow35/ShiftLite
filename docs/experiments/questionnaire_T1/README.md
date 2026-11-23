@@ -7,10 +7,10 @@
 - `pairs/`：60 张盲评图（30 对，`pair_XXX_L/R.png`，中性命名，不泄露组别）。
 - `blind_pairs.csv`：发给打分人，仅含 `pair_id` 与左右图路径。
 - `subjective_template.csv`：打分表，4 项 × 左右两侧 + `rater/date/notes`。
-- `answer_key.csv`：**汇总人保留**，`pair_id -> sample, left_group, right_group`。
+- `answer_key.csv`：`pair_id -> sample, left_group, right_group`，**仅供汇总人使用，打分人请勿查看**。注意本文件已入库（复现留存），且生成种子 `20261120` 公开可推导，盲评有效性依赖打分人自觉。
 - `rubric.md`：四项定义与 1–5 锚点、汇总口径。
 
-> `pairs/` 为本地生成、**不入库**（体积与来源限制）；分发问卷时请把整个 `questionnaire_T1/` 目录（含 `pairs/`）打包给打分人，或按下方命令在本地重新生成。
+> `pairs/` 为本地生成、**不入库**（体积与来源限制）；分发问卷时把 `questionnaire_T1/` 目录打包给打分人，但**剔除 `answer_key.csv`**，或按下方命令在本地重新生成。
 
 ## 材料来源与口径
 

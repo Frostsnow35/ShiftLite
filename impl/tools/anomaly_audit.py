@@ -241,7 +241,7 @@ def main():
     (out / "anomalies_labeled.json").write_text(
         json.dumps({"meta": meta, "records": records,
                     "input_detection_failures": input_detect,
-                    "multi_instance_candidates": multi_only}, ensure_ascii=False, indent=2),
+                    "multi_instance_candidates": multi_only}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
 
     L = ["# 失真样本审计（#17）", "",
