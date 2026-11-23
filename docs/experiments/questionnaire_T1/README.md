@@ -26,6 +26,13 @@
 3. 填 `rater/date`；不确定处写 `notes`。
 4. 回传 CSR 后，汇总人用 `answer_key.csv` 还原组别，按 `rubric.md` 的汇总口径统计。
 
+## 结果
+
+- 统计产物：`results/`（`item_stats.csv`、`wilcoxon_table.csv`、`rater_consistency.csv`、`scores/`、`results.md`）。
+- 30 对 × 4 名化名评分者（`simR1`–`simR4`；真实身份由作者私下保管）。
+- 四项均**未检测到显著差异**（p=0.63–0.93）；`n_used` 仅 2–11、功效有限，**不能宣称二者等价**。
+- 复现：`python tools/analyze_questionnaire.py --key ... --scores-dir ... --out-dir ...`（详见 `results/results.md`）。
+
 ## 再生成
 
 ```powershell
