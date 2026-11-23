@@ -1,0 +1,17 @@
+﻿metric,dimension,group,n_pairs,n_raters,value
+"ICC(2,1)",naturalness,FP32,30,4,0.817
+"ICC(2,1)",naturalness,INT8,30,4,0.809
+"ICC(2,1)",zebra_feature,FP32,30,4,0.934
+"ICC(2,1)",zebra_feature,INT8,30,4,0.921
+"ICC(2,1)",pose_structure,FP32,30,4,0.611
+"ICC(2,1)",pose_structure,INT8,30,4,0.611
+"ICC(2,1)",background,FP32,30,4,0.706
+"ICC(2,1)",background,INT8,30,4,0.712
+Krippendorff_alpha_interval,naturalness,FP32,30,4,0.813
+Krippendorff_alpha_interval,naturalness,INT8,30,4,0.804
+Krippendorff_alpha_interval,zebra_feature,FP32,30,4,0.932
+Krippendorff_alpha_interval,zebra_feature,INT8,30,4,0.919
+Krippendorff_alpha_interval,pose_structure,FP32,30,4,0.594
+Krippendorff_alpha_interval,pose_structure,INT8,30,4,0.594
+Krippendorff_alpha_interval,background,FP32,30,4,0.697
+Krippendorff_alpha_interval,background,INT8,30,4,0.704

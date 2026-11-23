@@ -1,0 +1,20 @@
+{
+  "total": 95,
+  "by_status": {
+    "reviewed": 90,
+    "needs_discussion": 5
+  },
+  "by_round": {
+    "2026-11-23 second round": 88,
+    "2026-11-10 first round": 7
+  },
+  "second_reviews": 3,
+  "needs_discussion": [
+    "n02381460_1090",
+    "n02381460_1360",
+    "n02381460_1540",
+    "n02381460_1690",
+    "n02381460_3010"
+  ],
+  "reviewer_ids": "simR1..simR4（化名）"
+}

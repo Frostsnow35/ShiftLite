@@ -9,6 +9,7 @@
 - `subjective_template.csv`：打分表，4 项 × 左右两侧 + `rater/date/notes`。
 - `answer_key.csv`：`pair_id -> sample, left_group, right_group`，**仅供汇总人使用，打分人请勿查看**。注意本文件已入库（复现留存），且生成种子 `20261120` 公开可推导，盲评有效性依赖打分人自觉。
 - `rubric.md`：四项定义与 1–5 锚点、汇总口径。
+- `results/`：#15 统计结果（`item_stats.csv`、`wilcoxon_table.csv`、`rater_consistency.csv`、`results.md`、`scores/`）。
 
 > `pairs/` 为本地生成、**不入库**（体积与来源限制）；分发问卷时把 `questionnaire_T1/` 目录打包给打分人，但**剔除 `answer_key.csv`**，或按下方命令在本地重新生成。
 

@@ -29,7 +29,7 @@
 </dl>
 
 <h2>一、概述 / Summary</h2>
-<p>本 PR 补齐 #17 失真四类归档、#19 E4 层间判读、#15 主观问卷材料、#25 期末叙事，并附 #20 官方复核总清单。仅新增分析脚本与文档，不改动模型、训练、量化或既有质量数值。<br>
+<p>本 PR 补齐 #17 失真四类归档、#19 E4 层间判读、#15 主观问卷材料、#25 期末叙事，并附 #20 官方复核总清单、第二轮人工复核终表与 #15 问卷统计结果。仅新增分析脚本与文档，不改动模型、训练、量化或既有质量数值。<br>
 <span class="en">This PR adds the #17 four-class distortion audit, the #19 E4 layer interpretation, the #15 subjective questionnaire materials, and the #25 final-report narrative, plus the #20 official review checklist. It only adds analysis scripts and docs; model, training, quantization and existing quality numbers are unchanged.</span></p>
 
 <h2>二、变更内容 / Changes</h2>
@@ -41,6 +41,9 @@
   <tr><td><code>impl/tools/build_blind_pairs.py</code> + <code>docs/experiments/questionnaire_T1/*</code></td><td>30 对盲评材料、rubric、模板、答案键（#15；图片本地生成不入库）</td></tr>
   <tr><td><code>docs/FINAL_REPORT_NARRATIVE.md</code></td><td>期末报告/视频/答辩叙事（#25）</td></tr>
   <tr><td><code>docs/experiments/2026-11-09-7940HX/official_checklist*.{csv,md}</code></td><td>#20 官方复核总清单（95 行）</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/human_review_final/*</code></td><td>#20 第二轮人工复核终表：95 行，90 reviewed / 5 needs_discussion，P3 首轮保留</td></tr>
+  <tr><td><code>docs/experiments/questionnaire_T1/results/*</code></td><td>#15 统计结果：30 对 × 4 人，Wilcoxon/ICC/α</td></tr>
+  <tr><td><code>impl/tools/merge_review.py</code>、<code>impl/tools/analyze_questionnaire.py</code></td><td>可复用的复核合并与问卷统计脚本</td></tr>
   <tr><td><code>.gitignore</code></td><td>忽略 cache、备份、本地复核与问卷图片</td></tr>
 </table>
 
@@ -49,20 +52,21 @@
   <li>工具与模型 / Tool &amp; model：opencode，模型 deepseek-flash。</li>
   <li>参与范围 / Extent：AI 生成了 <code>impl/tools/anomaly_audit.py</code>、<code>impl/tools/build_blind_pairs.py</code>、<code>docs/layer_style_structure_E4.md</code>、<code>docs/FINAL_REPORT_NARRATIVE.md</code>、<code>impl/README.md</code> 的两个小节，以及问卷与清单的表格文本；数据来源与阈值口径由人工给定。</li>
   <li>人工复核 / Human review：作者将逐项核对脚本与文档、运行脚本并抽查产物；合并前需完成人工复核。<span class="en">The author will review the scripts/docs, run them, and spot-check outputs before merge.</span></li>
+  <li>人工数据来源 / Human data：<code>simR1</code>–<code>simR4</code> 为四位组员化名，分别完成 #20 复核与 #15 打分；真实身份由作者私下保管，不入库。</li>
 </ul>
 
 <h2>四、验证与测试 / Verification &amp; Testing</h2>
 <p>已执行并验证：<br>
 <code>python tools/anomaly_audit.py ...</code> → <code>OK records=14 input_detect=5 multi=76</code>，<code>anomalies_labeled.json</code> 可解析、计数一致；<br>
 <code>python tools/build_blind_pairs.py ... --n 30 --seed 20261120</code> → 30 对、60 张图、<code>blind_pairs.csv</code>/<code>answer_key.csv</code>/<code>subjective_template.csv</code> 已生成；<br>
-JSON/CSV 结构与字段已抽查。<br>
+JSON/CSV 结构与字段已抽查；<code>merge_review.py</code> → 95 行（90 reviewed / 5 needs_discussion）；<code>analyze_questionnaire.py</code> → 30 对 / 4 人 / 960 个评分，<code>item_stats.csv</code> 与原件哈希一致。<br>
 <span class="en">Scripts were run and outputs parsed; counts and schemas were spot-checked. No unit tests are added in this PR.</span></p>
 
 <h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
 <ul>
   <li>#17：逐图 ssim/LPIPS 来自主表（i5，v1），检测来自 2026-11-09（7940HX），属跨批次；证据列已如实标注，不混作同一统计。</li>
-  <li>#15：盲评图来自本机 2026-11-19 质量运行，非官方 2026-11-09；<code>pairs/</code> 不入库，需随问卷包分发或本地重生成。</li>
-  <li>#20：人工复核仍有 85 张 pending；#15 仍需 4 名真人打分。机器预标注不代替人工结论。</li>
+  <li>#15：盲评图来自本机 2026-11-19 质量运行，非官方 2026-11-09；<code>pairs/</code> 不入库。四项均未检测到显著差异（p=0.63–0.93），但 <code>n_used</code> 仅 2–11、功效有限，不能宣称等价。</li>
+  <li>#20：第二轮完成 90 reviewed / 5 needs_discussion；P3 抽查 7 张沿用首轮；第二位复核仅 3 例。<code>reviewed</code> 不等于通过。</li>
 </ul>
 
 <h2>六、审阅清单 / Reviewer Checklist</h2>
