@@ -63,7 +63,10 @@ def quantize(xml_path: Path, calib: list[np.ndarray], out_xml: Path,
         def validation_fn(compiled, _ds):
             errs = [float(np.mean((np.asarray(compiled(x)[0]) - r) ** 2))
                     for x, r in zip(subset, refs)]
-            return -float(np.mean(errs))  # 越大越好
+            # 返回严格正值 1/(1+MSE)：NNCF 按相对掉点判停，若直接返回 -MSE，
+            # FP32 参照自比对时度量=0，calculate_accuracy_drop 除零崩溃
+            # （2026-11-23 实测）。值域 (0,1]，越大越好。
+            return 1.0 / (1.0 + float(np.mean(errs)))
 
         pairs = nncf.Dataset(list(zip(subset, refs)), lambda p: p[0])
         # MVN 保护对该分支同样适用：不传 ignored_scope 会把 InstanceNorm
@@ -118,9 +121,12 @@ def main():
     size = out.stat().st_size + out.with_suffix(".bin").stat().st_size
     print(f"      → {out} ({size/1024/1024:.1f} MB)")
 
-    (out.parent / "quantize_report.json").write_text(
+    # 报告跟输出模型同名，避免二次运行覆盖上一版的量化记录
+    report = out.parent / f"quantize_report_{out.stem}.json"
+    report.write_text(
         json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    print(f"      report → {report}")
 
 
 if __name__ == "__main__":
