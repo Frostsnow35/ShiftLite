@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR #45 · ShiftLite T8 / E4 / E3</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+pre { overflow-x:auto; padding:1rem; background:rgba(127,127,127,.12); } @media print { pre { white-space:pre-wrap; } }
+</style>
+</head>
+<body><main>
+<h1>PR #45 · T8 独立运行副本、E4 迁移对隔离与 E3 质量展示<br><small lang="en">Portable runtime, pair-specific E4 results and consistent E3 reporting</small></h1>
+<dl class="meta"><dt>作者 / Author</dt><dd>camdies</dd><dt>日期 / Date</dt><dd>2026-11-24</dd><dt>候选代码 / Code reviewed</dt><dd><code>fix/T8-start-prob @ b77c3f5</code></dd><dt>目标 / Target</dt><dd><a href="https://github.com/Frostsnow35/ShiftLite/pull/45">Frostsnow35/ShiftLite #45</a></dd></dl>
+<h2>一、概述 / Summary</h2>
+<p>伙伴可以从仓库复制运行所需源码和配置，在独立目录保存自己的模型与结果。切换迁移对后，E4 展示该对的层间结果，E3 的网页、实验进度卡片和导表按同一口径解释有效批次、缺失项与指标开关。</p>
+<p lang="en">The launcher builds a separate runtime while preserving local models and results across resynchronization. E4 reads layer data for the selected pair. E3 retains usable classification batches and explains missing or disabled metrics across the web panel, progress card and Markdown export.</p>
+<h2>二、变更内容 / Changes</h2>
+<table><tr><th>阶段 / Commit</th><th>改动及审阅入口 / Scope and review focus</th></tr>
+<tr><td>T8 · <code>8963811</code><br>整合 / Merge <code>0be1755</code></td><td><code>impl/run-local.ps1</code> 兼容 Windows PowerShell 5.1 编码，复制 pair 清单与 AdaIN 入口。用含空格和中文的目录验证首次同步与再次同步。<br>Check script encoding, manifest and AdaIN entry-point copying, and preservation of runtime-owned files on repeat launches.</td></tr>
+<tr><td>E4 / E3 · <code>65b045f</code></td><td><code>impl/server.py</code> 按所选 pair 的 results 读取 layers.json。缺结果的对显示待测。E3 区分代理、部分和真实评测，兼容旧分类键与零准确率。<br>E4 uses the selected results directory. E3 distinguishes proxy, partial and real evaluations and accepts legacy batches and valid zero scores.</td></tr>
+<tr><td>执行交接 / Agent handoff<br><code>942833a</code></td><td>方案固定六状态、目标域、新旧键回退、独立分母和共享输入。执行 agent 在 <code>impl/core/quality_state.py</code> 提取判据，接入服务端、<code>impl/web/app.js</code> 和 <code>impl/core/figures.py</code>，补充 Python 和 Node 契约测试。<br>The handoff defined six states, target matching, schema priority and per-batch counts. The implementation agent applied the contract to all three consumers and added regression fixtures and tests.</td></tr>
+<tr><td>审阅后修订 / Follow-up<br><code>b77c3f5</code></td><td>残缺结构副表单独跳过。FID/KID 和参照数核对目标域，逐图提示、摘要和复核链接遵循当前 pair。Dice 缺值显示有效数未记录。网页百分比与 Python 舍入一致。<br>Secondary-table errors are isolated. Distribution scores, reference counts and review links follow the current pair. Missing Dice counts remain unknown, and web percentages match Python formatting.</td></tr></table>
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<p>用户确定范围、审阅方案并保留发布决定。Codex 参与 T8/E4/E3 排查、执行方案与测试约束编写、复核其他 agent 的实现并复现问题。初版 E3 报告将实现工具记录为 Google DeepMind Antigravity（模型标注 Gemini 4 Carbon）。末轮由 OpenAI Codex（GPT-6）修订代码、扩展回归、运行独立副本及内置浏览器验收，并编写本说明。最终代码的人工签核待作者完成。</p>
+<p lang="en">The author set the scope and reviewed the plan. Codex helped investigate T8/E4/E3, specify the handoff and test cases, and reproduce defects in the other agent’s implementation. Its report identifies Antigravity and Gemini 4 Carbon for the initial E3 candidate. OpenAI Codex (GPT-6) implemented the follow-up, ran automated and browser checks, and prepared this note. Final human sign-off is pending.</p>
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>以下结果来自本地候选的开发验收。Windows 11 x64、Python 3.12.4、Node 24.16.0，启动器另在 Windows PowerShell 5.1 验证。<br>These are local candidate results on Windows 11 x64, including the Windows PowerShell 5.1 launcher.</p>
+<ul><li>在 <code>impl/</code> 运行 <code>python -B -X utf8 -m unittest discover -s tests -v</code>：27 项通过，0 跳过。含 T8 再同步、E4 四对隔离及 E3 空结构实跑 CLI。另用 <code>-E -S</code> 验证其中 4 项纯标准库测试。<br>All 27 tests passed, including launcher resync, E4 isolation and the sparse-structure CLI case. Four parser tests also passed without site packages.</li>
+<li><code>node --check web/app.js</code> 和 <code>node tests/test_quality_ui.cjs</code> 通过。90,298 次百分比对照与 Python 零差异，含 38.83% 和 61.17% 两个曾出错的结果。<br>JavaScript syntax and UI contracts passed. All 90,298 formatting comparisons matched Python.</li>
+<li>独立副本四个状态请求均返回 HTTP 200。内置浏览器逐一切换并返回默认对；仅 B 时显示 75.00%（n=12），C 标缺。夏→冬拒绝旧 zebra FID 80.70 及其 140 张参照数。<br>All four state endpoints returned 200. Browser switching preserved the valid B result and missing C batch. Winter rejected both the stale zebra FID and its reference count.</li></ul>
+<details open><summary>人工复现 / Run the four-pair review</summary><p>从仓库根打开 PowerShell，使用项目 Python 3.12 CPU 环境。默认读取 .venv，也可通过 E3_PYTHON 指定解释器。首次安装见 <code>docs/REPRODUCING_T0_T1.md</code>。在浏览器检查“03 质量评测”和“04 实验进度”，完成后 Ctrl+C 停服。<br>Run the block from the repository root with the project CPU environment. Inspect the Quality and Progress tabs, then stop the server with Ctrl+C.</p><pre>$repo = (Resolve-Path .).Path
+$py = if ($env:E3_PYTHON) { $env:E3_PYTHON } else { (Resolve-Path &#x27;.venv/Scripts/python.exe&#x27;).Path }
+$run = Join-Path ([IO.Path]::GetTempPath()) (&#x27;ShiftLite 复核-&#x27; + [guid]::NewGuid().ToString(&#x27;N&#x27;))
+$launcher = Join-Path $repo &#x27;impl/run-local.ps1&#x27;
+$port = 18770
+&amp; $launcher -Python $py -RunRoot $run -CliArgs @(&#x27;figures&#x27;,&#x27;--help&#x27;)
+if ($LASTEXITCODE -ne 0) { throw &#x27;同步失败&#x27; }
+$work = Join-Path $run &#x27;impl&#x27;
+$art = Join-Path $work &#x27;artifacts&#x27;
+foreach ($id in &#x27;horse2zebra&#x27;,&#x27;summer2winter&#x27;,&#x27;zebra2horse&#x27;,&#x27;style_monet&#x27;) {
+    $base = if ($id -eq &#x27;horse2zebra&#x27;) { $art } else { Join-Path $art $id }
+    $res = Join-Path $base &#x27;results&#x27;
+    $null = New-Item -ItemType Directory -Path $res -Force
+    $file = Join-Path $res &#x27;quality.json&#x27;
+    if ($id -in @(&#x27;horse2zebra&#x27;,&#x27;summer2winter&#x27;)) {
+        Copy-Item -LiteralPath (Join-Path $work &#x27;tests/e3_partial_b_only.json&#x27;) -Destination $file
+        &amp; $launcher -Python $py -RunRoot $run -CliArgs @(&#x27;figures&#x27;,&#x27;--pair&#x27;,$id)
+        if ($LASTEXITCODE -ne 0) { throw &quot;figures $id&quot; }
+        Get-Content -LiteralPath (Join-Path $base &#x27;figures/quality_table.md&#x27;) -Encoding utf8 -ErrorAction Stop | Select-String &#x27;任务保真&#x27;
+    } elseif ($id -eq &#x27;zebra2horse&#x27;) {
+        [IO.File]::WriteAllText($file,&#x27;{&quot;metrics_source&quot;:&quot;proxy&quot;,&quot;mean&quot;:{&quot;ssim_bc&quot;:0.9},&quot;rows&quot;:[],&quot;n_samples&quot;:1}&#x27;)
+    }
+}
+&quot;RunRoot=$run&quot;
+&quot;http://127.0.0.1:$port/&quot;
+&amp; $launcher -Python $py -RunRoot $run -CliArgs @(&#x27;serve&#x27;,&#x27;--host&#x27;,&#x27;127.0.0.1&#x27;,&#x27;--port&#x27;,&quot;$port&quot;)</pre>
+<p>依次切换 horse2zebra（B 75.00%，缺 C）、summer2winter（分类不适用）、zebra2horse（代理）、style_monet（无数据），再切回默认对。<br>Expect a partial B batch, disabled classification, proxy metrics and an empty state respectively. Return to the first pair and confirm its measured value is restored.</p></details>
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>上述快速流程使用合成 JSON，无需模型权重。实图推理需要另行准备模型与样图。重复导出时以当次产物清单为准，旧副表可能仍在磁盘上。异机、Linux/macOS 和全新依赖安装尚待独立复验。<br>The walkthrough uses synthetic results. Live inference requires model and image assets. Check the current output list when reusing a directory, since an older secondary table may remain. A second machine, other operating systems and a fresh dependency install remain unverified.</p>
+<h2>六、审阅清单 / Reviewer Checklist</h2><ul>
+<li><input type="checkbox"> 核对首次同步与重跑后的本地资源；切换 E4 有结果和无结果的对。 / Check runtime asset preservation and E4 measured versus unmeasured pairs.</li>
+<li><input type="checkbox"> 比对网页、卡片及两张导出质量表，核对缺 C、禁用原因、目标域和分母。 / Compare panel, card and exports for the missing side, disabled reason, domain and counts.</li>
+<li><input type="checkbox"> 作者复跑测试、审阅实现及 AI 披露后签核。 / Author reruns tests and reviews the code and AI disclosure before sign-off.</li></ul></main></body></html>
