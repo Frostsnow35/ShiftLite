@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PR #45 · ShiftLite T8 / E4 / E3</title>
+<title>PR #47 · ShiftLite T8 / E4 / E3</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
@@ -31,7 +31,7 @@ pre { overflow-x:auto; padding:1rem; background:rgba(127,127,127,.12); } @media 
 <tr><td>执行交接 / Agent handoff<br><code>942833a</code></td><td>方案固定六状态、目标域、新旧键回退、独立分母和共享输入。执行 agent 在 <code>impl/core/quality_state.py</code> 提取判据，接入服务端、<code>impl/web/app.js</code> 和 <code>impl/core/figures.py</code>，补充 Python 和 Node 契约测试。<br>The handoff defined six states, target matching, schema priority and per-batch counts. The implementation agent applied the contract to all three consumers and added regression fixtures and tests.</td></tr>
 <tr><td>审阅后修订 / Follow-up<br><code>b77c3f5</code></td><td>残缺结构副表单独跳过。FID/KID 和参照数核对目标域，逐图提示、摘要和复核链接遵循当前 pair。Dice 缺值显示有效数未记录。网页百分比与 Python 舍入一致。<br>Secondary-table errors are isolated. Distribution scores, reference counts and review links follow the current pair. Missing Dice counts remain unknown, and web percentages match Python formatting.</td></tr></table>
 <h2>三、AI 参与披露 / AI Participation Disclosure</h2>
-<p>用户确定范围、审阅方案并保留发布决定。Codex 参与 T8/E4/E3 排查、执行方案与测试约束编写、复核其他 agent 的实现并复现问题。初版 E3 报告将实现工具记录为 Google DeepMind Antigravity（模型标注 Gemini 4 Carbon）。末轮由 OpenAI Codex（GPT-6）修订代码、扩展回归、运行独立副本及内置浏览器验收，并编写本说明。最终代码的人工签核待作者完成。</p>
+<p>用户确定范围、审阅方案并保留发布决定。Codex 参与 T8/E4/E3 排查、执行方案与测试约束编写、复核其他 agent 的实现并复现问题。初版 E3 报告将实现工具记录为 Google DeepMind Antigravity（模型标注 Gemini 4 Carbon）。末轮由 OpenAI Codex（GPT-6）修订代码、扩展回归、运行独立副本及内置浏览器验收，并编写本说明。已经完成benji核验</p>
 <p lang="en">The author set the scope and reviewed the plan. Codex helped investigate T8/E4/E3, specify the handoff and test cases, and reproduce defects in the other agent’s implementation. Its report identifies Antigravity and Gemini 4 Carbon for the initial E3 candidate. OpenAI Codex (GPT-6) implemented the follow-up, ran automated and browser checks, and prepared this note. Final human sign-off is pending.</p>
 <h2>四、验证与测试 / Verification &amp; Testing</h2>
 <p>以下结果来自本地候选的开发验收。Windows 11 x64、Python 3.12.4、Node 24.16.0，启动器另在 Windows PowerShell 5.1 验证。<br>These are local candidate results on Windows 11 x64, including the Windows PowerShell 5.1 launcher.</p>
