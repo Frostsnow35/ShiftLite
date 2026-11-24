@@ -23,3 +23,11 @@ impl/artifacts/figures_backup_*/
 impl/artifacts/results/review_20261119/
 impl/artifacts/results/structure_review/
 docs/experiments/questionnaire_T1/pairs/
+
+# 训练复现本地数据与产物（train/README.md 说明）
+impl/artifacts/datasets/
+train/runs/
+*.pth
+
+# 复核拼图本地留存（生成脚本 impl/tools/build_review_contact_sheets.py 可重建）
+docs/experiments/2026-11-23-review/contact_sheets/

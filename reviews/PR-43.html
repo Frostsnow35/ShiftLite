@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明</span></h1>
+<p class="en">Bilingual reviewer note for AI-assisted pull requests. Template: <code>docs/reviewer-note.template.html</code>.</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>43</dd>
+  <dt>作者 / Author</dt><dd>Frostsnow35（WorkBuddy 代理执行）</dd>
+  <dt>日期 / Date</dt><dd>2026-11-23</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy / MiMo</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本轮收口三件事：#20 复核 85 张 pending 清零（P1 检测失败归因 + P2 多实例对应）、#18 精度控制量化定档（维持 PTQ）、#8 训练复现流水线落地（train/）。附带修复 NNCF 精度控制分支除零崩溃与训练脚本 GAN 目标尺寸 bug。<br>
+<span class="en">Closes out three items: clears the 85 pending human reviews for #20 (detection-failure attribution + multi-instance correspondence), settles #18 accuracy-control quantization (keep PTQ), and lands the #8 training-reproduction pipeline (train/). Also fixes an NNCF accuracy-control divide-by-zero and a GAN target-size bug in the training script.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>docs/experiments/2026-11-23-review/*</code></td><td>#20 复核包：85 条逐样本结论 CSV + 总结（P1 6 张全归因检测漏检；P2 79 张 0 错配）</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/official_checklist.csv</code></td><td>85 行 pending → reviewed 回填（结论绑定 i5 2026-10-24 批次图）</td></tr>
+  <tr><td><code>impl/tools/build_review_contact_sheets.py</code></td><td>复核拼图生成脚本（X/A/B/C 四列，可复现）</td></tr>
+  <tr><td><code>impl/core/quantize.py</code></td><td>validation_fn 改严格正值（修 NNCF 相对掉点除零）；量化报告按输出模型命名防覆盖</td></tr>
+  <tr><td><code>docs/experiments/2026-11-23-accuracy-control/*</code></td><td>#18 定档实验记录：bench + 质量抽测（C_ac 慢约 4%、质量无收益）</td></tr>
+  <tr><td><code>impl/README.md §5.5</code></td><td>精度控制量化定档结论</td></tr>
+  <tr><td><code>train/*</code></td><td>#8 训练复现：train.py / evaluate.py / config.json / Colab 笔记本 / README（自训权重不进 A/B/C）</td></tr>
+  <tr><td><code>.gitignore</code></td><td>datasets、runs、*.pth、复核拼图本地留存</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy，模型 MiMo。</li>
+  <li>参与范围 / Extent：AI 执行了 85 张复核图的视觉判读与结论撰写（用户委托「帮我复核」）、#18 实验脚本与量化修复、train/ 全部代码与文档；判读结论为 AI 辅助视觉意见，3 张 needs_discussion 仍待组内讨论。</li>
+  <li>人工复核 / Human review：复核由用户委托 AI 执行，结论如实标注来源；用户在会话中确认执行范围。<span class="en">The review was AI-assisted under explicit user delegation; provenance is recorded in each row.</span></li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>已执行并验证：<br>
+复核计数：95 = 92 reviewed + 3 needs_discussion，85 行回填一致；<br>
+<code>python -m core.quantize --accuracy-control --subset 300</code> → 掉点 0.0045 &lt; 0.01，产出 11.1 MB INT8；<br>
+bench/质量抽测脚本实跑：C_ac/C 延迟比 1.04，SSIM(b,c) 0.8895→0.8859、LPIPS 0.0944→0.0982（n=30）；<br>
+<code>train.py --max-iters 20</code> CPU 冒烟通过：损失链正常、train_losses.csv 落盘。<br>
+<span class="en">Counts reconcile; quantization and bench scripts ran end-to-end; training smoke passed on CPU.</span></p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<ul>
+  <li>复核结论绑定 i5 2026-10-24 批次图（非官方 2026-11-09 批次），已按既有绑定规则如实标注。</li>
+  <li>3 张 needs_discussion（1090/1540/3120）仍待组内讨论，属有依据的不可判定。</li>
+  <li>#18 延迟绝对值受沙箱负载影响，仅同会话比值入档；n=30 质量抽测不外推全量。</li>
+  <li>#8 完整训练需 Colab T4 跑量（当前仅 CPU 冒烟），GPU 机型/耗时表待回填。</li>
+</ul>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox"> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox"> 测试通过 / Tests pass</li>
+  <li><input type="checkbox"> AI 产出已人工复核 / AI output manually verified</li>
+</ul>
+</body>
+</html>
