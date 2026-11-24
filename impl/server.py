@@ -15,6 +15,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from core.quality_state import quality_measurements, format_classification_card, resolve_classification
+
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 ART = ROOT / "artifacts"
@@ -134,7 +136,15 @@ def build_state(pair_id: str | None = None) -> dict:
         groups.append(g)
 
     layers = _read_json(results / "layers.json")
-    experiments = _experiments(conv, quant, bench, quality, avail, layers=layers)
+    classification = resolve_classification(pair, quality)
+    measured = quality_measurements(pair, quality)
+    queue_file = results / "structure_review" / "review_queue.json"
+    queue_url = ("/artifacts/" + queue_file.relative_to(ART).as_posix()
+                 if pair.metric_enabled("mask_iou") and queue_file.is_file() else None)
+    experiments = _experiments(
+        conv, quant, bench, quality, avail,
+        layers=layers, pair=pair, classification=classification, measurements=measured,
+    )
 
     return {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -163,12 +173,16 @@ def build_state(pair_id: str | None = None) -> dict:
         "convert_report": conv,
         "quantize_report": quant,
         "quality": quality,
+        "quality_classification": classification,
+        "quality_measurements": measured,
+        "structure_review_url": queue_url,
         "layers": layers,
         "experiments": experiments,
     }
 
 
-def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
+def _experiments(conv, quant, bench, quality, avail, layers=None,
+                 pair=None, classification=None, measurements=None) -> list[dict]:
     """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
 
     apple2orange 扩展已按收敛决定取消，不再占用编号；任务型斑马判别与结构/背景
@@ -178,16 +192,17 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
-    deep_layer = layers if layers is not None else _read_json(ART / "results" / "layers.json")
-    quality = quality or {}
-    q_deep = quality.get("deep") or {}
+    raw_quality = quality
+    quality = quality if isinstance(quality, dict) else {}
     q_real = quality.get("metrics_source") == "real"
+    cls = (classification if isinstance(classification, dict)
+           else resolve_classification(pair, raw_quality))
 
     def layers_note():
-        if not deep_layer:
+        if not layers:
             return "未开始：需跑 python cli.py layers"
         # 逐层漂移可能落在噪声水平内，如实报道这一情形
-        summary = deep_layer.get("summary", {})
+        summary = layers.get("summary", {})
         worst = summary.get("most_drifted_layer")
         cos = summary.get("most_drifted_cosine")
         monotone = summary.get("drift_monotonic_along_depth")
@@ -200,22 +215,29 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     def quality_note():
         if not quality:
             return "待测"
-        base = "SSIM / PSNR / MAE 已算；"
-        if q_real:
-            parts = []
-            if q_deep.get("lpips"):
-                parts.append("真实 LPIPS")
-            if q_deep.get("fid"):
-                parts.append("FID/KID")
-            if q_deep.get("mask"):
-                parts.append("掩码 IoU + 背景 SSIM")
-            if q_deep.get("zebra_discrimination"):
-                parts.append("斑马判别")
-            if q_deep.get("anomalies"):
-                parts.append(f"异常登记 {q_deep['anomalies']['count']} 例")
-            return base + "已接真实感知指标：" + "、".join(parts)
-        return (base + "真实 LPIPS 与 FID/KID、掩码 IoU、斑马判别、异常登记"
-                "待跑 quality --deep（当前为代理值，不得写进报告）")
+        summary = measurements if measurements is not None else quality_measurements(pair, quality)
+        base = (" / ".join(summary["pixels"]) + " 已算；" if summary["pixels"] else "逐像素指标未记录；")
+        partial = quality.get("metrics_source") == "partial"
+        if not (q_real or partial):
+            if cls.get("status") == "disabled":
+                return (f"{base}当前为代理值，运行 quality --deep 可测量当前迁移对适用的指标；"
+                        f"类别判别不适用（{cls['reason']}）")
+            return base + "当前为代理值（尚未运行真实类别判别），运行 quality --deep 可测量当前迁移对适用的指标"
+
+        deep = quality.get("deep")
+        if not isinstance(deep, dict):
+            deep = {}
+        has_errors = isinstance(deep.get("errors"), list) and bool(deep["errors"])
+        parts = list(summary["deep"])
+        cls_text = format_classification_card(cls, has_errors=has_errors)
+        if cls_text:
+            parts.append(cls_text)
+        heading = "深度评测部分完成" if partial else "深度评测"
+        details = "、".join(parts) or "尚无完整单项通过"
+        anomalies = deep.get("anomalies")
+        if isinstance(anomalies, dict) and type(anomalies.get("count")) is int and anomalies["count"] >= 0:
+            details += f"；异常登记 {anomalies['count']} 例"
+        return f"{base}{heading}：{details}"
 
     def conv_note():
         if not conv:
@@ -248,7 +270,7 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
          "note": quality_note()},
         {"code": "E4", "title": "层间分工分析（逐层表示漂移）",
          "half": "阶段二",
-         "status": st(bool(deep_layer)),
+         "status": st(bool(layers)),
          "note": layers_note()},
         {"code": "E5", "title": "训练复现（独立于主对照）",
          "half": "阶段三",

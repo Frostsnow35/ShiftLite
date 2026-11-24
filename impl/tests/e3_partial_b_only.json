@@ -1,0 +1,14 @@
+{
+  "metrics_source": "partial",
+  "n_samples": 20,
+  "mean": {"ssim_bc": null, "psnr_bc": null},
+  "rows": [],
+  "deep": {
+    "complete": false,
+    "class_discrimination": {
+      "target": "zebra",
+      "by_batch": {"b": {"top1_accuracy": 0.75, "n": 12}}
+    },
+    "errors": [{"metric": "classifier_c", "error": "synthetic fixture"}]
+  }
+}
