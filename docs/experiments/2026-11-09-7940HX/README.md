@@ -4,6 +4,7 @@
 
 - [人工表](human_review.csv)：原有 10 张实际意见，署名按要求为空。
 - [人工小结与待讨论事项](human_review_summary.md)：7 条 reviewed、3 条 needs_discussion；其余 85 张未查看。
+- [第二轮人工复核终表](human_review_final/)：95 行合并表与覆盖统计（90 reviewed / 5 needs_discussion；P3 抽查沿用首轮），含化名说明与来源。
 - [固定样本顺序](legacy_samples.json)、[对应检测记录](legacy_detections.json)。
 - [原图片哈希清单](image-manifest.json)：10 张对照图与质量 JSON 的 SHA-256，用于原图完整性核验；目视复核用 [PR #31 评论中的压缩拼图](https://github.com/Frostsnow35/ShiftLite/pull/31#issuecomment-6845125203)。
 - [实验来源与指标](metrics-summary.json)：数据规模、模型哈希、评测时源码哈希及口径。

@@ -1,0 +1,35 @@
+﻿sample,side,label,score,reason,human_status,human_note
+n02381460_1090,A,zebra,0.2763,below_score_threshold,reviewed,上排仍可见 2 个条纹轮廓，无掩码，疑似漏检
+n02381460_1090,B,zebra,0.2765,below_score_threshold,reviewed,上排仍可见 2 个条纹轮廓，无掩码，疑似漏检
+n02381460_1100,X,horse,,no_target_detection,reviewed,马群清楚可辨但无掩码，疑似漏检
+n02381460_1100,C,zebra,0.4703,below_score_threshold,reviewed,同处有条纹但无掩码，疑似漏检；掩码侧另有溢出
+n02381460_1120,X,horse,0.3907,below_score_threshold,reviewed,4 只马清楚可辨但无掩码，疑似漏检
+n02381460_1260,A,zebra,0.4371,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_1260,B,zebra,0.4371,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_1350,A,zebra,0.3237,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_1350,B,zebra,0.3241,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_1540,A,zebra,,no_target_detection,needs_discussion,远处马匹轮廓可见但条纹不可辨，疑似漏检/证据不足
+n02381460_1540,B,zebra,,no_target_detection,needs_discussion,远处马匹轮廓可见但条纹不可辨，疑似漏检/证据不足
+n02381460_1540,C,zebra,,no_target_detection,needs_discussion,远处马匹轮廓可见但条纹不可辨，疑似漏检/证据不足
+n02381460_1660,A,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_1660,B,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_1660,C,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_1750,A,zebra,0.0964,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_1750,B,zebra,0.0966,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_2890,X,horse,,no_target_detection,reviewed,灌木中单马清楚可辨但无掩码，疑似漏检
+n02381460_3010,X,horse,0.1001,below_score_threshold,needs_discussion,剪影可辨但无掩码，疑似漏检；物种不可判
+n02381460_3010,A,zebra,,no_target_detection,needs_discussion,只有剪影，无法判断条纹，证据不足
+n02381460_3010,B,zebra,,no_target_detection,needs_discussion,只有剪影，无法判断条纹，证据不足
+n02381460_3010,C,zebra,,no_target_detection,needs_discussion,只有剪影，无法判断条纹，证据不足
+n02381460_3120,A,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_3120,B,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_3120,C,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_3240,X,horse,,no_target_detection,reviewed,水中主体清楚可辨但无掩码，疑似漏检
+n02381460_440,A,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_440,B,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_440,C,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）
+n02381460_4450,X,horse,0.0709,below_score_threshold,reviewed,卧地主体可辨、score 0.0709 无掩码，疑似漏检
+n02381460_4660,X,horse,,no_target_detection,reviewed,仰卧主体可辨但无掩码，疑似漏检
+n02381460_7250,A,zebra,0.1675,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_7250,B,zebra,0.1673,below_score_threshold,pending,本轮未分派（P3 抽查未执行）
+n02381460_7250,C,zebra,,no_target_detection,pending,本轮未分派（P3 抽查未执行）

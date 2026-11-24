@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #44</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request. 双语审阅说明：AI 参与的 PR 随 PR 提交本文件。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>44</dd>
+  <dt>作者 / Author</dt><dd>Frostsnow35（AI Agent 协助 / with AI Agent assistance）</dd>
+  <dt>日期 / Date</dt><dd>2026-11-24</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（内置编码 Agent）</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>本 PR 将 <code>feat/report-eval</code> 分支上的 commit <code>9a69c0e</code>（#15 主观问卷结果 + #20 第二轮复核）rebase 合并到最新 <code>main</code>，使进展报告所引用的主观问卷统计与二轮复核覆盖数据在 <code>main</code> 上可查。本 PR 本身仅是一次「整包搬运」合并：不修改任何实验数值，只把已有 commit 接到最新主干。<br>
+<span class="en">This PR rebases and merges commit <code>9a69c0e</code> from <code>feat/report-eval</code> (#15 questionnaire results + #20 second-round review) onto the latest <code>main</code>, so the subjective statistics and second-round review coverage cited in the progress report are visible on <code>main</code>. The PR itself is a pure relocation merge: it changes no experimental numbers, it only carries the existing commit onto the current trunk.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<p>本 PR 引入的内容全部来自被合并 commit <code>9a69c0e</code>，与最新 <code>main</code> 合并无冲突。/ All introduced content comes from the merged commit <code>9a69c0e</code>; the merge against latest <code>main</code> is conflict-free.</p>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>docs/experiments/questionnaire_T1/results/</code></td><td>#15 问卷结果：item_stats / wilcoxon_table / rater_consistency / results.md / 4 份 scores CSV（30 对 × 4 人）/ #15 questionnaire results.</td></tr>
+  <tr><td><code>impl/tools/analyze_questionnaire.py</code></td><td>#15 问卷统计脚本（均值±标准差 / Wilcoxon / ICC / Krippendorff α）/ questionnaire stats script.</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/human_review_final/</code></td><td>#20 第二轮人工复核（95 行；90 reviewed / 5 needs_discussion；第二位复核 3 例）/ #20 second-round human review.</td></tr>
+  <tr><td><code>impl/tools/merge_review.py</code></td><td>#20 复核合并脚本 / review-merge script.</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（内置编码 Agent）。/ WorkBuddy (built-in coding agent).</li>
+  <li>参与范围 / Extent：被合并 commit <code>9a69c0e</code> 由 AI Agent 产出——问卷与复核的表格整理、合并脚本（<code>analyze_questionnaire.py</code>、<code>merge_review.py</code>）、统计与结果文档（<code>results.md</code>、<code>coverage.md</code>）等由 AI 生成；评分与人工观察由化名评分者（simR1–simR4，组内）提供，AI 负责汇总与一致性计算。本 PR 的合并动作与本文档亦由 AI Agent 完成。/ The merged commit was produced by the AI agent: table assembly, merge scripts, statistics and result docs were AI-generated; the raw scores and human observations come from anonymized in-team raters, and the AI aggregates and computes consistency. This merge and the present note are also done by the AI agent.</li>
+  <li>人工复核 / Human review：合并前由作者核对（i）<code>results.md</code> 的统计量与 <code>analyze_questionnaire.py</code> 对 4 份 scores CSV 的复算一致；（ii）<code>coverage.md</code> 的 95/90/5 与 <code>human_review_merged.csv</code> 行数一致；（iii）与进展报告第四节 #15、#20 两行逐项对照，确认数字同源。/ Before merge the author verified: (i) <code>results.md</code> statistics match a re-run of <code>analyze_questionnaire.py</code> over the 4 score CSVs; (ii) <code>coverage.md</code> counts match the merged review CSV row count; (iii) the figures align item-by-item with the progress report's #15 and #20 rows.</li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>合并前在独立 worktree 执行：<code>git merge origin/main</code> 无冲突（exit 0）；分支与 <code>main</code> 的 merge-base 为 <code>a907934</code>。问卷统计可由 <code>analyze_questionnaire.py</code> 复算（见 <code>results.md</code> §5 复现命令）。本 PR 不新增数值，故不重跑模型评测。/ Before merge, run in an isolated worktree: <code>git merge origin/main</code> completed with no conflicts; merge-base is <code>a907934</code>. Questionnaire stats are reproducible via <code>analyze_questionnaire.py</code> (see <code>results.md</code> §5). No model eval is re-run since the PR adds no numbers.</p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>（1）合并后 <code>main</code> 的 #20 会同时存在「一轮 AI 辅助复核（85 reviewed / 3 待讨论）」与「二轮人工复核（90 reviewed / 5 待讨论）」两版，二轮为更全口径，后续报告/答辩以二轮为准。（2）二轮与问卷均标注功效有限：问卷 n_used 仅 2–11，「未检测到显著差异」不等于「等价」。（3）评分者以化名 simR1–simR4 入库，真实身份不写仓库，盲评有效性依赖评分者不看 <code>answer_key.csv</code>。/ (1) After merge, #20 will carry two review rounds on <code>main</code> (round-1 AI-assisted 85/3; round-2 human 90/5); round-2 is the fuller one and is authoritative for later reports. (2) Both are flagged as low-power: questionnaire n_used is only 2–11, so "no significant difference" ≠ "equivalent". (3) Raters are stored under pseudonyms simR1–simR4; real identities are not in the repo; blind validity relies on raters not reading <code>answer_key.csv</code>.</p>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox" checked> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox" checked> 与最新 main 无冲突 / Clean merge against latest main</li>
+  <li><input type="checkbox" checked> 问卷/复核统计与脚本复算一致 / Stats match script re-run</li>
+  <li><input type="checkbox" checked> 与进展报告 #15、#20 行数字同源 / Figures align with progress report #15/#20 rows</li>
+</ul>
+</body>
+</html>
