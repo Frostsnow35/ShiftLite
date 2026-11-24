@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI PR Reviewer Note / AI PR 审阅说明 — PR #46</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #4f46e5; }
+  .en { color: #6b7280; font-size: .92rem; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 1rem 0; }
+  .meta dt { font-weight: 600; }
+  code { background: rgba(127,127,127,.15); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; }
+</style>
+</head>
+<body>
+<h1>AI PR Reviewer Note <span class="en">/ AI PR 审阅说明</span></h1>
+<p class="en">Bilingual reviewer note for an AI-assisted pull request. 双语审阅说明：AI 参与的 PR 随 PR 提交本文件。</p>
+
+<dl class="meta">
+  <dt>PR 编号 / PR number</dt><dd>46</dd>
+  <dt>作者 / Author</dt><dd>Frostsnow35（AI Agent 协助 / with AI Agent assistance）</dd>
+  <dt>日期 / Date</dt><dd>2026-11-24</dd>
+  <dt>AI 工具·模型 / AI tool &amp; model</dt><dd>WorkBuddy（内置编码 Agent）</dd>
+</dl>
+
+<h2>一、概述 / Summary</h2>
+<p>将全仓评分人代号从 <code>simR1–simR4</code> 统一为 <code>问卷人A–问卷人D</code>，并把"化名"措辞改为"组内 4 位评分人代号，真实姓名不写入仓库"。纯命名与措辞修订，不改动任何评分数值或统计量。<br>
+<span class="en">Rename rater labels from <code>simR1–simR4</code> to <code>问卷人A–问卷人D</code> across the repo, and replace "pseudonym" wording with "in-team rater labels, real names not stored in the repo". Pure naming and wording change; no score values or statistics are modified.</span></p>
+
+<h2>二、变更内容 / Changes</h2>
+<table>
+  <tr><th>文件 / File</th><th>改动 / Change</th></tr>
+  <tr><td><code>docs/experiments/questionnaire_T1/results/scores/scores_*.csv</code></td><td>4 份打分表重命名 <code>scores_simR1..4.csv</code> → <code>scores_问卷人A..D.csv</code>（<code>git mv</code> 保留历史），表内 <code>rater</code> 列同步改名 / Rename 4 score sheets, <code>rater</code> column updated.</td></tr>
+  <tr><td><code>docs/experiments/questionnaire_T1/results/wilcoxon_table.csv</code></td><td>per-rater 行的 scope 列 <code>simR1..4</code> → <code>问卷人A..D</code> / per-rater scope column renamed.</td></tr>
+  <tr><td><code>docs/experiments/questionnaire_T1/results/results.md</code></td><td>设计说明、复现命令、边界三处同步 / design note, repro command, boundary note updated.</td></tr>
+  <tr><td><code>docs/experiments/2026-11-09-7940HX/human_review_final/</code>（5 个文件）</td><td>#20 二轮复核的 REVIEWERS / PROVENANCE / coverage / assignment / 合并表全部同步 / #20 second-round review files all synced.</td></tr>
+  <tr><td><code>impl/tools/analyze_questionnaire.py</code> / <code>impl/tools/merge_review.py</code></td><td>示例路径与文档字符串同步 / example paths and docstrings updated.</td></tr>
+  <tr><td><code>reviews/PR-36.html</code> / <code>reviews/PR-44.html</code></td><td>历史 PR 说明中评分人措辞同步 / rater wording in past PR notes synced.</td></tr>
+  <tr><td><code>.gitignore</code></td><td>增加 <code>.workbuddy/</code>，避免本地工作数据误入仓库 / ignore <code>.workbuddy/</code>.</td></tr>
+</table>
+
+<h2>三、AI 参与披露 / AI Participation Disclosure</h2>
+<ul>
+  <li>工具与模型 / Tool &amp; model：WorkBuddy（内置编码 Agent）。/ WorkBuddy (built-in coding agent).</li>
+  <li>参与范围 / Extent：全部改动由 AI Agent 完成——批量改名（含 4 份 CSV 的 <code>git mv</code> 重命名）、措辞统一、PR 说明同步。评分数值、统计结果、复核结论未做任何修改。/ All changes were made by the AI agent: batch renames (including the <code>git mv</code> of the 4 CSVs), wording unification, PR-note syncing. No score values, statistics, or review conclusions were touched.</li>
+  <li>人工复核 / Human review：作者逐文件抽查改写后的措辞（REVIEWERS / PROVENANCE / results / 两份 PR 说明）；重命名后用 <code>analyze_questionnaire.py</code> 重跑，确认可复算性未受影响。/ The author spot-checked the reworded passages file by file (REVIEWERS / PROVENANCE / results / both PR notes); the script was re-run after renaming to confirm reproducibility is intact.</li>
+</ul>
+
+<h2>四、验证与测试 / Verification &amp; Testing</h2>
+<p>复算验证：在 impl/ 下执行<br>
+<code>python tools/analyze_questionnaire.py --key ../docs/experiments/questionnaire_T1/answer_key.csv --scores-dir ../docs/experiments/questionnaire_T1/results/scores --out-dir &lt;tmp&gt;</code><br>
+输出 <code>OK pairs=30 raters=4 obs=960</code>；<code>item_stats.csv</code> / <code>wilcoxon_table.csv</code> / <code>rater_consistency.csv</code> 三份与仓库现存版本逐字节一致，scope 列正确显示 <code>问卷人A–D</code>。全仓检索 <code>simR</code> / <code>化名</code> 无残留（<code>.workbuddy/</code> 除外，已忽略）。<br>
+<span class="en">Reproducibility check: re-running <code>analyze_questionnaire.py</code> with the renamed score sheets prints <code>OK pairs=30 raters=4 obs=960</code>; the three output CSVs match the in-repo versions byte-for-byte, and the scope column correctly shows <code>问卷人A–D</code>. A repo-wide search for <code>simR</code> / <code>化名</code> returns no matches (outside the now-ignored <code>.workbuddy/</code>).</span></p>
+
+<h2>五、风险与已知问题 / Risks &amp; Known Issues</h2>
+<p>（1）改名为展示层改动，统计量、判定结论、批次口径均不变。（2）git 历史中 commit <code>9a69c0e</code> 的原始文件名仍为 <code>scores_simR*.csv</code>，属历史记录，不作追溯改写。（3）<code>.workbuddy/</code> 加入忽略后，本地工作目录不再进仓库。/ (1) Display-layer rename only; statistics, conclusions and batch definitions are unchanged. (2) The original commit <code>9a69c0e</code> in git history still carries the <code>scores_simR*.csv</code> filenames; history is not rewritten. (3) <code>.workbuddy/</code> is now ignored so local working data stays out of the repo.</p>
+
+<h2>六、审阅清单 / Reviewer Checklist</h2>
+<ul>
+  <li><input type="checkbox" checked> 改动理解无误 / Changes are understood</li>
+  <li><input type="checkbox" checked> 复算一致（三份 CSV 逐字节）/ Re-run output matches repo byte-for-byte</li>
+  <li><input type="checkbox" checked> 无 simR / 化名残留 / No simR / pseudonym wording left</li>
+  <li><input type="checkbox" checked> 未触碰任何评分数值 / No score values touched</li>
+</ul>
+</body>
+</html>
