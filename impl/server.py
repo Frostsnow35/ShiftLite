@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import math
 import mimetypes
 import re
 import threading
@@ -168,6 +169,28 @@ def build_state(pair_id: str | None = None) -> dict:
     }
 
 
+def _classification_batches(deep: dict) -> set[str]:
+    """Prefer a complete B/C comparison from one schema, then the available side."""
+    current = deep.get("class_discrimination")
+    by_batch = current.get("by_batch") if isinstance(current, dict) else None
+    partial = set()
+    for batches in (by_batch, deep.get("zebra_discrimination")):
+        if not isinstance(batches, dict):
+            continue
+        valid = set()
+        for tag in ("b", "c"):
+            batch = batches.get(tag)
+            accuracy = batch.get("top1_accuracy") if isinstance(batch, dict) else None
+            if (type(accuracy) in (int, float) and 0 <= accuracy <= 1
+                    and math.isfinite(accuracy)):
+                valid.add(tag)
+        if len(valid) == 2:
+            return valid
+        if valid and not partial:
+            partial = valid
+    return partial
+
+
 def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
 
@@ -179,7 +202,6 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
         return "done" if ok else ("partial" if partial else "todo")
 
     quality = quality or {}
-    q_deep = quality.get("deep") or {}
     q_real = quality.get("metrics_source") == "real"
 
     def layers_note():
@@ -200,21 +222,33 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
         if not quality:
             return "待测"
         base = "SSIM / PSNR / MAE 已算；"
-        if q_real:
-            parts = []
-            if q_deep.get("lpips"):
-                parts.append("真实 LPIPS")
-            if q_deep.get("fid"):
-                parts.append("FID/KID")
-            if q_deep.get("mask"):
-                parts.append("掩码 IoU + 背景 SSIM")
-            if q_deep.get("zebra_discrimination"):
-                parts.append("斑马判别")
-            if q_deep.get("anomalies"):
-                parts.append(f"异常登记 {q_deep['anomalies']['count']} 例")
-            return base + "已接真实感知指标：" + "、".join(parts)
-        return (base + "真实 LPIPS 与 FID/KID、掩码 IoU、斑马判别、异常登记"
-                "待跑 quality --deep（当前为代理值，不得写进报告）")
+        partial = quality.get("metrics_source") == "partial"
+        if not (q_real or partial):
+            return base + "当前为代理值，运行 quality --deep 可测量当前迁移对适用的指标"
+
+        deep = quality.get("deep")
+        if not isinstance(deep, dict):
+            deep = {}
+        parts = [label for key, label in (("lpips", "真实 LPIPS"), ("fid", "FID"), ("kid", "KID"))
+                 if deep.get(key)]
+        if deep.get("mask"):
+            parts.append("掩码 IoU + 背景 SSIM")
+        if deep.get("canny_edge_ssim_bc") is not None:
+            parts.append("Canny 边缘 SSIM")
+
+        batches = _classification_batches(deep)
+        if len(batches) == 2:
+            parts.append("目标类别判别")
+        elif partial and batches:
+            missing = "C" if "b" in batches else "B"
+            parts.append(f"类别判别尚缺 {missing} 批")
+
+        heading = "深度评测部分完成" if partial else "深度评测"
+        details = "、".join(parts) or "尚无完整单项通过，请查 deep.errors"
+        anomalies = deep.get("anomalies")
+        if isinstance(anomalies, dict) and "count" in anomalies:
+            details += f"；异常登记 {anomalies['count']} 例"
+        return f"{base}{heading}：{details}"
 
     def conv_note():
         if not conv:

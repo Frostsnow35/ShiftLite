@@ -88,6 +88,14 @@ foreach ($step in @('download', 'fetch-samples', 'quantize --size 256 --exclude-
 
 在运行副本的 impl 下核对 `stylize/weights/{vgg_normalised,decoder}.pth`、`stylize/samples/la_muse.jpg` 及 `artifacts/adain/quantize_report_256.json` 中的 `variants.skip_norm_ops`。该变体成功时应有 `artifacts/adain/ir/adain_256_int8_skip_norm_ops.xml` 和同名 .bin。重启服务，确认 `state.ready=true` 且 `state.backends` 含 int8，然后发送同一个 POST。验收以 HTTP 200、`ok=true`、`backend=int8` 且能从 `output_url` 读取并解码生成图片为准。
 
+同一副本也可验证主线 C 组。在空副本向 `/api/infer` 发送下列请求，缺少输入图时返回 404。停服后准备 `artifacts/samples/horse_01.png` 和 `artifacts/models/horse2zebra_int8.{xml,bin}`，再启动服务。检查 `GET /api/state?pair=horse2zebra` 的 `state.groups` 中 C 组的 `available` 为 true。再次发送请求，应返回 HTTP 200、`group=C`，从本次 `output_url` 能解码出 256×256 PNG。上述资源均可由默认对的 setup 生成。
+
+```json
+{"pair":"horse2zebra","sample":"horse_01","source":"samples","group":"C"}
+```
+
+复验 E4 时，在空副本依次请求四个迁移对及省略参数的 `/api/state`，检查响应的 `state.layers` 为 null、E4 卡片为 todo。停服后仅将仓库内 `impl/artifacts/results/layers.json` 与 `impl/artifacts/zebra2horse/results/layers.json` 复制到副本中的相同相对位置，再重复请求。正向、反向的卡片应分别对应各自文件，省略参数应等于正向；其余两对仍应为 todo。
+
 ## 4 正式实验与表格
 
 ```powershell

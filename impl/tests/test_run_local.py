@@ -1,3 +1,4 @@
+import codecs
 import json
 import os
 from pathlib import Path
@@ -18,7 +19,8 @@ class RunLocalTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt" and LAUNCHER.exists(),
                          "requires Windows PowerShell and the source checkout")
     def test_fresh_copy_and_resync(self):
-        with tempfile.TemporaryDirectory() as root:
+        self.assertTrue(LAUNCHER.read_bytes().startswith(codecs.BOM_UTF8))
+        with tempfile.TemporaryDirectory(prefix="ShiftLite 交接-") as root:
             target = Path(root) / "impl"
             env = dict(os.environ, T8_SCRIPT=str(LAUNCHER), T8_RUN=root,
                        T8_PYTHON=sys.executable)
@@ -37,6 +39,7 @@ class RunLocalTests(unittest.TestCase):
                      "-Command", command], env=env, stderr=subprocess.STDOUT, timeout=60)
 
             self.assertIn(b"setup", launch("'--help'"))
+            self.assertIn(b"--rounds", launch("'bench','--help'"))
             self.assertFalse((target / "artifacts").exists())
             markers = [target / sub / "t8-marker" for sub in
                        ("artifacts/results", "stylize/weights", "stylize/samples")]
@@ -48,7 +51,7 @@ class RunLocalTests(unittest.TestCase):
                 self.assertEqual(marker.read_bytes(), b"local resource")
             self.assertEqual({p.stem for p in (target / "pairs").glob("*.json")},
                              set(pairs.list_pairs()))
-            subprocess.run([sys.executable, "-B", "-c",
+            subprocess.run([sys.executable, "-B", "-X", "utf8", "-c",
                             "import server, stylize.adain; "
                             "from core.pairs import list_pairs, load_pair; "
                             "[load_pair(p) for p in list_pairs()]"],
