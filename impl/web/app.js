@@ -68,6 +68,28 @@ function pctv(v, digits = 2) {
   return (Number(v) * 100).toFixed(digits) + '%';
 }
 
+/* 分类百分比保留两位小数，采用半分位向偶舍入（对齐 Python :.2%，如 0.03125 -> 3.12%） */
+function fmtClassPct(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) return '—';
+  const [mantissa, expPart] = String(v).toLowerCase().split('e');
+  const [intPart, fracPart = ''] = mantissa.split('.');
+  const digits = intPart + fracPart;
+  const exp = Number(expPart || 0) - fracPart.length + 4;
+  let q;
+  if (exp >= 0) {
+    q = BigInt(digits) * (10n ** BigInt(exp));
+  } else {
+    const k = -exp;
+    const padded = digits.padStart(k + 1, '0');
+    q = BigInt(padded.slice(0, padded.length - k));
+    const rem = padded.slice(padded.length - k);
+    const half = '5' + '0'.repeat(k - 1);
+    if (rem > half || (rem === half && q % 2n === 1n)) q += 1n;
+  }
+  const s = q.toString().padStart(3, '0');
+  return `${s.slice(0, -2)}.${s.slice(-2)}%`;
+}
+
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1095,13 +1117,43 @@ function renderProtocol() {
 
 /* ══════════ 质量面板 ══════════ */
 
+function qualityClassificationState(q) {
+  if (STATE && STATE.quality_classification) return STATE.quality_classification;
+  const pm = (STATE && STATE.pair && STATE.pair.metrics) || {};
+  const cd = pm.class_discrimination;
+  const disabled = !!(cd && typeof cd === 'object' && cd.enabled === false);
+  const reason = disabled ? (cd.reason || '不适用于当前迁移对') : '';
+  const target = (STATE && STATE.pair && STATE.pair.ref_prefix) || '目标域';
+  const status = disabled ? 'disabled' : (!q ? 'untested' : (q.metrics_source === 'real' || q.metrics_source === 'partial' ? 'missing' : 'proxy'));
+  return { enabled: !disabled, status, reason, target, source: null, batches: { b: null, c: null } };
+}
+
+function formatClassificationNotice(cls) {
+  if (!cls) return '';
+  const b = cls.batches && cls.batches.b;
+  const c = cls.batches && cls.batches.c;
+  const nb = b && Number.isInteger(b.n) && b.n > 0 ? `n=${b.n}` : '样本量未记录';
+  const nc = c && Number.isInteger(c.n) && c.n > 0 ? `n=${c.n}` : '样本量未记录';
+  if (cls.status === 'complete' && b && c) {
+    return `目标类别判别（B ${fmtClassPct(b.top1_accuracy)} / C ${fmtClassPct(c.top1_accuracy)}，B 批 ${nb}，C 批 ${nc}）`;
+  }
+  if (cls.status === 'partial' && b) {
+    return `目标类别判别（B 批 ${fmtClassPct(b.top1_accuracy)}，尚缺 C 批，B 批 ${nb}）`;
+  }
+  if (cls.status === 'partial' && c) {
+    return `目标类别判别（C 批 ${fmtClassPct(c.top1_accuracy)}，尚缺 B 批，C 批 ${nc}）`;
+  }
+  return '';
+}
+
 function renderQuality() {
   const q = STATE.quality;
   const notice = $('qualityNotice');
 
   if (!q) {
     notice.className = 'notice';
-    notice.innerHTML = '还没有质量数据。运行 <b>python cli.py quality</b> 会在样例图上跑三组推理并计算结构指标。';
+    notice.innerHTML = '';
+    notice.append('还没有质量数据。运行 ', el('b', { text: 'python cli.py quality' }), ' 会在样例图上跑三组推理并计算结构指标。');
     emptyChart($('lpipsChart'), '暂无数据');
     emptyChart($('structChart'), '暂无数据');
     $('qualityTable').innerHTML = '';
@@ -1109,19 +1161,58 @@ function renderQuality() {
     return;
   }
 
-  const m = q.mean || {};
-  const d = q.deep || {};
-  const real = q.metrics_source === 'real' && d.lpips;
+  const m = (q.mean && typeof q.mean === 'object') ? q.mean : {};
+  const d = (q.deep && typeof q.deep === 'object' && !Array.isArray(q.deep)) ? q.deep : {};
+  const isReal = q.metrics_source === 'real';
+  const isPartial = q.metrics_source === 'partial';
+  const isDeepMode = isReal || isPartial;
+  const hasRealLpips = isDeepMode && Boolean(d.lpips && typeof d.lpips.L_bc === 'number' && Number.isFinite(d.lpips.L_bc));
+  const cls = qualityClassificationState(q);
+  const pm = (STATE.pair && STATE.pair.metrics) || {};
+  const maskOff = !!(pm.mask_iou && typeof pm.mask_iou === 'object' && pm.mask_iou.enabled === false);
+  const maskWhy = (pm.mask_iou && pm.mask_iou.reason) || '不适用于当前迁移对';
+  const hasErrors = Array.isArray(d.errors) && d.errors.length > 0;
+  const pairId = (STATE.pair && STATE.pair.id) || 'horse2zebra';
+  const validSamples = Number.isInteger(q.n_samples) && q.n_samples > 0;
 
-  notice.className = 'notice' + (real ? ' is-ok' : '');
-  notice.innerHTML = real
-    ? `<b>口径</b>：SSIM 与 OpenCV Canny 边缘 SSIM 已计算；LPIPS 为官方 AlexNet 真实感知距离，` +
-      `FID / KID 与掩码、判别已计算。<b>样本量 ${esc(q.n_samples)} 张</b>；检测器掩码并非真值，指标有效样本数与人工待复核状态见下方。`
-    : `<b>口径</b>：深度指标尚未完整通过；缺失值不参与相应均值。请检查 quality.json 的 deep.errors 并运行 <b>python cli.py quality --deep --limit 120</b>。`;
+  notice.className = 'notice' + (isReal ? ' is-ok' : '');
+  notice.innerHTML = '';
+  if (!isDeepMode) {
+    notice.append(el('b', { text: '口径' }), '：当前为结构代理值（SSIM / PSNR）；');
+    if (cls.status === 'disabled') {
+      notice.append(`类别判别不适用（${cls.reason || '不适用于当前迁移对'}）；`);
+    } else {
+      notice.append('尚未运行真实类别判别；');
+    }
+    if (maskOff) notice.append(`前景掩码与结构评测不适用（${maskWhy}）；`);
+    notice.append('运行 ', el('b', { text: `python cli.py quality --pair ${pairId} --deep` }), ' 可按当前迁移对启用的指标执行深度评测。');
+    if (hasErrors) notice.append('请检查 quality.json 的 deep.errors。');
+  } else {
+    const measured = [];
+    if (m.ssim_ab != null || m.ssim_bc != null || m.psnr_bc != null) measured.push('SSIM / PSNR');
+    if (typeof d.canny_edge_ssim_bc === 'number' && Number.isFinite(d.canny_edge_ssim_bc)) measured.push('OpenCV Canny 边缘 SSIM');
+    if (hasRealLpips) measured.push('真实 LPIPS（AlexNet）');
+    if (d.fid && d.kid) measured.push('FID / KID');
+    else if (d.fid) measured.push('FID');
+    else if (d.kid) measured.push('KID');
+    if (!maskOff && (d.mask || d.structure)) measured.push('前景掩码与背景保真');
+    const clsSummary = formatClassificationNotice(cls);
+    if (clsSummary) measured.push(clsSummary);
 
-  renderDeepTiles(q, d, real, m);
+    notice.append(el('b', { text: isReal ? '口径' : '口径（深度评测部分完成）' }), '：');
+    notice.append(measured.length ? `已实测 ${measured.join('、')}。` : '尚未取得完整的深度指标单项。');
+    if (maskOff) notice.append(`掩码与结构评测不适用（${maskWhy}）。`);
+    if (cls.status === 'disabled') notice.append(`类别判别不适用（${cls.reason || '不适用于当前迁移对'}）。`);
+    else if (cls.status === 'missing') notice.append('此次未取得有效类别判别结果。');
+    if (validSamples) notice.append('输入样本量 ', el('b', { text: `${q.n_samples} 张` }), '。');
+    else notice.append('输入样本量未记录。');
+    if (!maskOff && d.structure) notice.append('检测器掩码并非真值，指标有效样本数与人工待复核状态见下方。');
+    if (hasErrors) notice.append('部分步骤记录异常，请检查 quality.json 的 deep.errors。');
+  }
 
-  if (real) {
+  renderDeepTiles(q, d, hasRealLpips, m);
+
+  if (hasRealLpips) {
     bars($('lpipsChart'), [
       { label: 'a→b 转换', value: d.lpips.L_ab, color: '#6b7580' },
       { label: 'b→c 量化', value: d.lpips.L_bc, color: '#b07717' },
@@ -1171,7 +1262,8 @@ function renderDeepTiles(q, d, real, m) {
   const why = (k) => (pm[k] && pm[k].reason) || '不适用于当前迁移对';
   const refName = (STATE.pair && STATE.pair.ref_prefix) || '目标域';
 
-  put('样本量', `${q.n_samples}`, `生成批 · 生成于 ${esc(q.generated_at || '—')}`, true);
+  const sampleCount = Number.isInteger(q.n_samples) && q.n_samples > 0 ? `${q.n_samples}` : '未记录';
+  put('样本量', sampleCount, `生成批 · 生成于 ${q.generated_at || '—'}`, true);
   put('PSNR (b,c)', fmt(m.psnr_bc, 2), 'dB · 越高越好');
 
   if (real && d.lpips) {
@@ -1184,22 +1276,33 @@ function renderDeepTiles(q, d, real, m) {
     const ref = d.fid.ref_domain || refName;
     const fb = deepPick(d.fid, 'b');
     const fc = deepPick(d.fid, 'c');
-    put('FID · B 批', fmt(fb, 2), `生成 ${d.fid.n_generated} vs 真实 ${d.fid.n_real}（${ref}）`);
-    put('FID · C 批', fmt(fc, 2), '越小分布越接近目标域');
+    const genN = Number.isInteger(d.fid.n_generated) && d.fid.n_generated > 0 ? d.fid.n_generated : '未记录';
+    const realN = Number.isInteger(d.fid.n_real) && d.fid.n_real > 0 ? d.fid.n_real : '未记录';
+    put('FID · B 批', typeof fb === 'number' ? fmt(fb, 2) : '缺失',
+      typeof fb === 'number' ? `生成 ${genN} vs 真实 ${realN}（${ref}）` : '缺少 B 批分布结果');
+    put('FID · C 批', typeof fc === 'number' ? fmt(fc, 2) : '缺失',
+      typeof fc === 'number' ? '越小分布越接近目标域' : '缺少 C 批分布结果');
   }
   if (d.kid) {
-    const kb = deepPick(d.kid, 'b') || {};
-    const kc = deepPick(d.kid, 'c') || {};
-    put('KID · B 批', fmt(kb.mean, 4), `± ${fmt(kb.std, 4)} · subset ${kb.subset_size}×${kb.n_subsets}`);
-    put('KID · C 批', fmt(kc.mean, 4), `± ${fmt(kc.std, 4)}`);
+    const kb = deepPick(d.kid, 'b');
+    const kc = deepPick(d.kid, 'c');
+    const kidSubB = kb && typeof kb.mean === 'number'
+      ? `${typeof kb.std === 'number' ? `± ${fmt(kb.std, 4)}` : '标准差未记录'} · ${kb.subset_size && kb.n_subsets ? `subset ${kb.subset_size}×${kb.n_subsets}` : '子集未记录'}`
+      : '缺少 B 批分布结果';
+    const kidSubC = kc && typeof kc.mean === 'number'
+      ? (typeof kc.std === 'number' ? `± ${fmt(kc.std, 4)}` : '标准差未记录')
+      : '缺少 C 批分布结果';
+    put('KID · B 批', kb && typeof kb.mean === 'number' ? fmt(kb.mean, 4) : '缺失', kidSubB);
+    put('KID · C 批', kc && typeof kc.mean === 'number' ? fmt(kc.mean, 4) : '缺失', kidSubC);
   }
   if (off('mask_iou')) {
     put('掩码 IoU', '不适用', why('mask_iou'));
     put('结构评测 v2 / 人工待复核', '不适用', why('mask_iou'));
   } else {
     if (d.mask) {
-      put('输出一致性 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples} · 检测器估计`);
-      put('输出一致性 Dice (a,c)', fmt(d.mask.mean_dice_ac, 3), `有效 ${d.mask.detected_pairs}/${q.n_samples}`);
+      const detN = d.mask.detected_pairs ?? '未记录';
+      put('输出一致性 IoU (a,c)', fmt(d.mask.mean_iou_ac, 3), `有效 ${detN}/${sampleCount} · 检测器估计`);
+      put('输出一致性 Dice (a,c)', fmt(d.mask.mean_dice_ac, 3), `有效 ${detN}/${sampleCount}`);
       put('旧背景 SSIM (a,c)', fmt(d.mask.mean_background_ssim_ac, 3), '旧填充算法，仅作历史对照');
     }
     if (d.structure) {
@@ -1214,30 +1317,41 @@ function renderDeepTiles(q, d, real, m) {
       put('检测失败样本', `${d.structure.n_failure_samples}`, '检测失败不等于畸形；人工复核待完成');
       for (const key of ['xa', 'xb', 'xc']) {
         put(`输入 Canny (${key})`, fmt(d[`canny_edge_ssim_${key}`], 4),
-          `有效 ${d.canny_n_valid?.[key] ?? '—'}/${q.n_samples} · 条纹也会产生边缘`);
+          `有效 ${d.canny_n_valid?.[key] ?? '—'}/${sampleCount} · 条纹也会产生边缘`);
       }
       box.append(el('a', { href: '/artifacts/results/structure_review/review_queue.json',
         text: '查看人工待复核清单（对照图在同目录）', target: '_blank', rel: 'noopener' }));
     }
   }
-  if (off('class_discrimination')) {
-    put('任务判别', '不适用', why('class_discrimination'));
-  } else {
-    // 新格式：class_discrimination.{target, by_batch}；
-    // 旧格式（已入库的 horse2zebra quality.json）：zebra_discrimination.{b,c}
-    const cd = d.class_discrimination;
-    const legacy = d.zebra_discrimination;
-    const byBatch = cd ? cd.by_batch : legacy;
-    if (byBatch) {
-      const zb = byBatch.b || {};
-      const zc = byBatch.c || {};
-      const tgt = (cd && cd.target) || refName;
-      put(`判别 · B 批（${tgt}）`, pctv(zb.top1_accuracy, 2), `n=${zb.n} · ResNet-50 top1`, true);
-      put(`判别 · C 批（${tgt}）`, pctv(zc.top1_accuracy, 2), `n=${zc.n} · 量化前后应接近`);
+  const cls = qualityClassificationState(q);
+  const hasErrors = Array.isArray(d.errors) && d.errors.length > 0;
+  if (cls.status === 'disabled') {
+    put('类别判别', '类别判别不适用', cls.reason || why('class_discrimination'));
+  } else if (cls.status === 'proxy') {
+    put('类别判别', '—', '尚未运行真实类别判别（需 quality --deep）');
+  } else if (cls.status === 'complete' || cls.status === 'partial') {
+    const tgt = cls.target || refName;
+    const zb = cls.batches && cls.batches.b;
+    const zc = cls.batches && cls.batches.c;
+    if (zb) {
+      const nb = Number.isInteger(zb.n) && zb.n > 0 ? `n=${zb.n}` : '样本量未记录';
+      put(`判别 · B 批（${tgt}）`, `${fmtClassPct(zb.top1_accuracy)}（${nb}）`, 'ResNet-50 top1', true);
+    } else {
+      put(`判别 · B 批（${tgt}）`, '缺少 B 批结果', '该批次未产出有效判别率', true);
     }
+    if (zc) {
+      const nc = Number.isInteger(zc.n) && zc.n > 0 ? `n=${zc.n}` : '样本量未记录';
+      put(`判别 · C 批（${tgt}）`, `${fmtClassPct(zc.top1_accuracy)}（${nc}）`, '量化前后应接近');
+    } else {
+      put(`判别 · C 批（${tgt}）`, '缺少 C 批结果', '该批次未产出有效判别率');
+    }
+  } else if (cls.status === 'missing') {
+    put('类别判别', '缺失', hasErrors
+      ? '此次未取得有效类别判别结果（请查 deep.errors）'
+      : '此次未取得有效类别判别结果');
   }
-  if (d.anomalies) {
-    put('异常登记', `${d.anomalies.count}`, `阈值 ssim(b,c) < ${d.anomalies.threshold}`);
+  if (d.anomalies && Number.isInteger(d.anomalies.count) && d.anomalies.count >= 0) {
+    put('异常登记', `${d.anomalies.count}`, `阈值 ssim(b,c) < ${d.anomalies.threshold ?? 0.8}`);
   }
 }
 

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import math
 import mimetypes
 import re
 import threading
@@ -15,6 +14,8 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+from core.quality_state import format_classification_card, resolve_classification
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -135,7 +136,11 @@ def build_state(pair_id: str | None = None) -> dict:
         groups.append(g)
 
     layers = _read_json(results / "layers.json")
-    experiments = _experiments(conv, quant, bench, quality, avail, layers=layers)
+    classification = resolve_classification(pair, quality)
+    experiments = _experiments(
+        conv, quant, bench, quality, avail,
+        layers=layers, pair=pair, classification=classification,
+    )
 
     return {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -164,34 +169,14 @@ def build_state(pair_id: str | None = None) -> dict:
         "convert_report": conv,
         "quantize_report": quant,
         "quality": quality,
+        "quality_classification": classification,
         "layers": layers,
         "experiments": experiments,
     }
 
 
-def _classification_batches(deep: dict) -> set[str]:
-    """Prefer a complete B/C comparison from one schema, then the available side."""
-    current = deep.get("class_discrimination")
-    by_batch = current.get("by_batch") if isinstance(current, dict) else None
-    partial = set()
-    for batches in (by_batch, deep.get("zebra_discrimination")):
-        if not isinstance(batches, dict):
-            continue
-        valid = set()
-        for tag in ("b", "c"):
-            batch = batches.get(tag)
-            accuracy = batch.get("top1_accuracy") if isinstance(batch, dict) else None
-            if (type(accuracy) in (int, float) and 0 <= accuracy <= 1
-                    and math.isfinite(accuracy)):
-                valid.add(tag)
-        if len(valid) == 2:
-            return valid
-        if valid and not partial:
-            partial = valid
-    return partial
-
-
-def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
+def _experiments(conv, quant, bench, quality, avail, layers=None,
+                 pair=None, classification=None) -> list[dict]:
     """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
 
     apple2orange 扩展已按收敛决定取消，不再占用编号；任务型斑马判别与结构/背景
@@ -201,8 +186,11 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
     def st(ok, partial=False):
         return "done" if ok else ("partial" if partial else "todo")
 
-    quality = quality or {}
+    raw_quality = quality
+    quality = quality if isinstance(quality, dict) else {}
     q_real = quality.get("metrics_source") == "real"
+    cls = (classification if isinstance(classification, dict)
+           else resolve_classification(pair, raw_quality))
 
     def layers_note():
         if not layers:
@@ -224,11 +212,15 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
         base = "SSIM / PSNR / MAE 已算；"
         partial = quality.get("metrics_source") == "partial"
         if not (q_real or partial):
-            return base + "当前为代理值，运行 quality --deep 可测量当前迁移对适用的指标"
+            if cls.get("status") == "disabled":
+                return (f"{base}当前为代理值，运行 quality --deep 可测量当前迁移对适用的指标；"
+                        f"类别判别不适用（{cls['reason']}）")
+            return base + "当前为代理值（尚未运行真实类别判别），运行 quality --deep 可测量当前迁移对适用的指标"
 
         deep = quality.get("deep")
         if not isinstance(deep, dict):
             deep = {}
+        has_errors = isinstance(deep.get("errors"), list) and bool(deep["errors"])
         parts = [label for key, label in (("lpips", "真实 LPIPS"), ("fid", "FID"), ("kid", "KID"))
                  if deep.get(key)]
         if deep.get("mask"):
@@ -236,17 +228,26 @@ def _experiments(conv, quant, bench, quality, avail, layers=None) -> list[dict]:
         if deep.get("canny_edge_ssim_bc") is not None:
             parts.append("Canny 边缘 SSIM")
 
-        batches = _classification_batches(deep)
-        if len(batches) == 2:
-            parts.append("目标类别判别")
-        elif partial and batches:
-            missing = "C" if "b" in batches else "B"
-            parts.append(f"类别判别尚缺 {missing} 批")
-
+        cls_text = format_classification_card(cls, has_errors=has_errors)
         heading = "深度评测部分完成" if partial else "深度评测"
-        details = "、".join(parts) or "尚无完整单项通过，请查 deep.errors"
+        if cls.get("status") in ("complete", "partial") and cls_text:
+            parts.append(cls_text)
+            details = "、".join(parts)
+        elif parts:
+            if cls_text:
+                parts.append(cls_text)
+            details = "、".join(parts)
+        elif cls.get("status") == "disabled" and cls_text:
+            err_tail = "，请查 deep.errors" if (partial or has_errors) else ""
+            details = f"尚无适用完整单项通过{err_tail}；{cls_text}"
+        else:
+            miss_note = cls_text or "此次未取得有效类别判别结果"
+            if "deep.errors" not in miss_note:
+                miss_note += "，请查 deep.errors"
+            details = f"尚无完整单项通过（{miss_note}）"
+
         anomalies = deep.get("anomalies")
-        if isinstance(anomalies, dict) and "count" in anomalies:
+        if isinstance(anomalies, dict) and type(anomalies.get("count")) is int and anomalies["count"] >= 0:
             details += f"；异常登记 {anomalies['count']} 例"
         return f"{base}{heading}：{details}"
 

@@ -11,6 +11,7 @@ E4 层序号 × 表示差异曲线     → fig_e4_layers.png
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import matplotlib
@@ -50,11 +51,13 @@ def _load(path: Path) -> dict | list:
 
 
 def _pair(pair=None):
-    """迁移对对象；不传则用默认 pair（horse2zebra）。"""
-    if pair is not None:
-        return pair
+    """迁移对对象；支持传入 Pair、pair_id 字符串或不传（用默认 horse2zebra）。"""
     from core.pairs import DEFAULT_PAIR, load_pair
-    return load_pair(DEFAULT_PAIR)
+    if pair is None:
+        return load_pair(DEFAULT_PAIR)
+    if isinstance(pair, str):
+        return load_pair(pair)
+    return pair
 
 
 def fig_e1_samples(results: Path, out: Path, pair=None) -> Path:
@@ -291,81 +294,152 @@ def fig_e4_layers(results: Path, out: Path) -> Path:
     return dest
 
 
+def _is_num(value) -> bool:
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def _is_pos_int(value) -> bool:
+    return type(value) is int and value > 0
+
+
+def _is_nonneg_int(value) -> bool:
+    return type(value) is int and value >= 0
+
+
 def _metric_text(value, digits=3):
-    return '缺失' if value is None else f'{value:.{digits}f}'
+    return '缺失' if not _is_num(value) else f'{value:.{digits}f}'
 
 
 def quality_table(results: Path, out: Path, pair=None) -> Path:
     """E3 质量对比表（markdown，报告直接引用）。"""
+    from core.quality_state import format_accuracy_pct, resolve_classification
+
     p = _pair(pair)
     ref = p.ref_prefix           # 参照域（zebra / horse / monet / winter）
     q = _load(results / "quality.json")
-    if "deep" not in q:
+    if (not isinstance(q, dict)
+            or not isinstance(q.get("deep"), dict)
+            or q.get("metrics_source") not in ("real", "partial")):
         raise SystemExit(
-            f"{p.id} 的 quality.json 没有 deep 字段（metrics_source={q.get('metrics_source')}）："
+            f"{p.id} 的 quality.json 没有 deep 字段（metrics_source="
+            f"{q.get('metrics_source') if isinstance(q, dict) else None}）："
             f"本表需要真实感知指标，先跑 `python cli.py quality --pair {p.id} --deep`")
     d = q["deep"]
-    mean = q["mean"]
-    lp = d["lpips"]
-    fid = d["fid"]
-    kid = d["kid"]
-    mask = d.get("mask") or {}
-    # 新结构 class_discrimination.{target, by_batch}；旧结构 zebra_discrimination.{b,c}
-    disc = (d.get("class_discrimination") or {}).get("by_batch") \
-        or d.get("zebra_discrimination")
+    mean = q.get("mean") if isinstance(q.get("mean"), dict) else {}
+    lp = d.get("lpips") if isinstance(d.get("lpips"), dict) else {}
+    fid = d.get("fid") if isinstance(d.get("fid"), dict) else {}
+    kid = d.get("kid") if isinstance(d.get("kid"), dict) else {}
+
+    lp_n = lp.get("n_images") if _is_pos_int(lp.get("n_images")) else None
+    q_n = q.get("n_samples") if _is_pos_int(q.get("n_samples")) else None
+    if lp_n is not None:
+        gen_head = f"生成批 n={lp_n}"
+    elif q_n is not None:
+        gen_head = f"输入总数 n={q_n}"
+    else:
+        gen_head = "样本量未记录"
+    mask_total = lp_n if lp_n is not None else (q_n if q_n is not None else "未记录")
+
+    n_real = fid.get("n_real") if _is_pos_int(fid.get("n_real")) else None
+    ref_head = f"{ref} 参照批 n={n_real}" if n_real is not None else f"{ref} 参照数未记录"
     k_b, k_c = f"b_vs_real_{ref}", f"c_vs_real_{ref}"
 
     def kid_str(key: str) -> str:
-        k = kid[key]
-        return (f"{k['mean']:.4f} ± {k['std']:.4f}"
-                f"（subset {k['subset_size']}×{k['n_subsets']}）")
+        k = kid.get(key) if isinstance(kid, dict) else None
+        if not isinstance(k, dict) or not _is_num(k.get("mean")):
+            return "缺失"
+        std_part = f" ± {k['std']:.4f}" if _is_num(k.get("std")) else "（标准差未记录）"
+        sub_sz = k.get("subset_size") if _is_pos_int(k.get("subset_size")) else None
+        n_sub = k.get("n_subsets") if _is_pos_int(k.get("n_subsets")) else None
+        sub_part = f"（subset {sub_sz}×{n_sub}）" if (sub_sz is not None and n_sub is not None) else "（子集未记录）"
+        return f"{k['mean']:.4f}{std_part}{sub_part}"
+
+    ssim_txt = _metric_text(mean.get("ssim_bc"), 4)
+    psnr_txt = f"{mean['psnr_bc']:.2f} dB" if _is_num(mean.get("psnr_bc")) else "缺失"
+    pixel_txt = "缺失" if (ssim_txt == "缺失" and psnr_txt == "缺失") else f"{ssim_txt} / {psnr_txt}"
 
     lines = [
         "# E3 量化质量对比表（"
-        f"{p.id}：生成批 n={lp['n_images']} / {ref} 参照批 n={fid['n_real']}）",
+        f"{p.id}：{gen_head} / {ref_head}）",
         "",
         "| 维度 | 指标 | 数值 | 说明 |",
         "|---|---|---|---|",
-        f"| 转换保真 | LPIPS(a,b) | {lp['L_ab']:.4f} | 运行时转换差异，≈0 即转换无损 |",
-        f"| 量化保真 | LPIPS(b,c) | {lp['L_bc']:.4f} | 量化本身引入的感知差异（核心） |",
-        f"| 总差异 | LPIPS(a,c) | {lp['L_ac']:.4f} | 原版到终版 |",
-        f"| 逐像素 | SSIM(b,c) / PSNR(b,c) | {mean['ssim_bc']:.4f} / {mean['psnr_bc']:.2f} dB | 均值 |",
-        f"| 结构（边缘） | Canny 边缘 SSIM(b,c) | {d['canny_edge_ssim_bc']:.4f} | 方案 §4 指定 Canny 版 |",
-        f"| 迁移质量 | FID(B vs 真实{ref}) | {fid[k_b]:.2f} | FP32 批 |",
-        f"| 迁移质量 | FID(C vs 真实{ref}) | {fid[k_c]:.2f} | INT8 批 |",
+        f"| 转换保真 | LPIPS(a,b) | {_metric_text(lp.get('L_ab'), 4)} | 运行时转换差异，≈0 即转换无损 |",
+        f"| 量化保真 | LPIPS(b,c) | {_metric_text(lp.get('L_bc'), 4)} | 量化本身引入的感知差异（核心） |",
+        f"| 总差异 | LPIPS(a,c) | {_metric_text(lp.get('L_ac'), 4)} | 原版到终版 |",
+        f"| 逐像素 | SSIM(b,c) / PSNR(b,c) | {pixel_txt} | 均值 |",
+        f"| 结构（边缘） | Canny 边缘 SSIM(b,c) | {_metric_text(d.get('canny_edge_ssim_bc'), 4)} | 方案 §4 指定 Canny 版 |",
+        f"| 迁移质量 | FID(B vs 真实{ref}) | {_metric_text(fid.get(k_b), 2)} | FP32 批 |",
+        f"| 迁移质量 | FID(C vs 真实{ref}) | {_metric_text(fid.get(k_c), 2)} | INT8 批 |",
         f"| 迁移质量 | KID(B) | {kid_str(k_b)} | FP32 批 |",
         f"| 迁移质量 | KID(C) | {kid_str(k_c)} | INT8 批 |",
     ]
     # 结构 / 任务保真两维按 pair manifest 开关条件渲染：关闭的 pair 显示「不适用」
-    # 而非 KeyError（坑4：关闭指标的 pair 跑 quality/figures 不崩）。
-    if mask:
-        dice_n = mask['detected_pairs'] if 'mean_dice_ac' in mask else '未记录'
-        lines += [
-            f"| 结构（前景） | 掩码 IoU(a,c) | {_metric_text(mask['mean_iou_ac'], 4)} | 检出 {mask['detected_pairs']}/{lp['n_images']} 对 |",
-            f"| 结构（前景） | 掩码 Dice(a,c) | {_metric_text(mask.get('mean_dice_ac'), 4)} | 有效 {dice_n}/{lp['n_images']} 对；旧 JSON 未计算时显示缺失 |",
-            f"| 结构（背景） | 背景 SSIM(a,c) | {_metric_text(mask['mean_background_ssim_ac'], 4)} | 掩码外区域 |",
-        ]
+    # 而启用但缺失结果的 pair 显示「缺失」，不混淆两者。
+    if not p.metric_enabled("mask_iou"):
+        mask_reason = p.metric_reason("mask_iou") or f"{p.id} 未启用 mask_iou（见 pairs/*.json）"
+        lines.append(
+            f"| 结构（前景/背景） | 掩码 IoU / Dice / 背景 SSIM | 不适用 | {mask_reason} |")
     else:
+        mask = d.get("mask") if isinstance(d.get("mask"), dict) else {}
+        if mask:
+            det_pairs = mask["detected_pairs"] if _is_nonneg_int(mask.get("detected_pairs")) else "未记录"
+            dice_n = det_pairs if "mean_dice_ac" in mask else "未记录"
+            denom_iou = f"检出 {det_pairs}/{mask_total} 对" if mask_total != "未记录" else f"检出 {det_pairs}（总输入数未记录）"
+            denom_dice = f"有效 {dice_n}/{mask_total} 对" if mask_total != "未记录" else f"有效 {dice_n}（总输入数未记录）"
+            lines += [
+                f"| 结构（前景） | 掩码 IoU(a,c) | {_metric_text(mask.get('mean_iou_ac'), 4)} | {denom_iou} |",
+                f"| 结构（前景） | 掩码 Dice(a,c) | {_metric_text(mask.get('mean_dice_ac'), 4)} | {denom_dice}；旧 JSON 未计算时显示缺失 |",
+                f"| 结构（背景） | 背景 SSIM(a,c) | {_metric_text(mask.get('mean_background_ssim_ac'), 4)} | 掩码外区域 |",
+            ]
+        else:
+            lines.append(
+                "| 结构（前景/背景） | 掩码 IoU / Dice / 背景 SSIM | 缺失 | 缺失（未取得有效掩码结果） |")
+
+    cls = resolve_classification(p, q)
+    cls_status = cls["status"]
+    cls_target = cls["target"]
+    b_batch = cls["batches"]["b"]
+    c_batch = cls["batches"]["c"]
+
+    def _batch_n_str(label: str, item: dict | None) -> str:
+        if not item:
+            return f"缺少 {label} 批结果"
+        return f"{label} 批 n={item['n']}" if item.get("n") is not None else f"{label} 批样本量未记录"
+
+    if cls_status == "disabled":
         lines.append(
-            f"| 结构（前景/背景） | 掩码 IoU / Dice / 背景 SSIM | 不适用 | "
-            f"{p.id} 未启用 mask_iou（见 pairs/*.json） |")
-    if disc:
+            f"| 任务保真 | 类别判别 | 不适用 | 类别判别不适用：{cls['reason']} |")
+    elif cls_status == "complete" and b_batch is not None and c_batch is not None:
+        b_pct = format_accuracy_pct(b_batch["top1_accuracy"])
+        c_pct = format_accuracy_pct(c_batch["top1_accuracy"])
         lines.append(
-            f"| 任务保真 | {ref} 判别 top1（B / C） | "
-            f"{disc['b']['top1_accuracy']:.2%} / {disc['c']['top1_accuracy']:.2%} | "
-            f"n={disc['b']['n']}；差异应据实解释 |")
+            f"| 任务保真 | {cls_target} 判别 top1（B / C） | {b_pct} / {c_pct} | "
+            f"{_batch_n_str('B', b_batch)}，{_batch_n_str('C', c_batch)}；差异应据实解释 |")
+    elif cls_status == "partial":
+        b_cell = format_accuracy_pct(b_batch["top1_accuracy"]) if b_batch is not None else "缺失"
+        c_cell = format_accuracy_pct(c_batch["top1_accuracy"]) if c_batch is not None else "缺失"
+        lines.append(
+            f"| 任务保真 | {cls_target} 判别 top1（B / C） | {b_cell} / {c_cell} | "
+            f"{_batch_n_str('B', b_batch)}；{_batch_n_str('C', c_batch)} |")
     else:
+        has_err = isinstance(d.get("errors"), list) and bool(d["errors"])
+        err_note = "（请查 deep.errors）" if has_err else ""
         lines.append(
-            f"| 任务保真 | 类别判别 | 不适用 | "
-            f"{p.id} 未启用 class_discrimination（见 pairs/*.json） |")
+            f"| 任务保真 | {cls_target} 判别 top1（B / C） | 缺失 | 此次未取得有效类别判别结果{err_note} |")
+
+    anom = d.get("anomalies") if isinstance(d.get("anomalies"), dict) else {}
+    anom_count = anom.get("count")
+    anom_txt = f"{anom_count} 例" if _is_nonneg_int(anom_count) else "未记录"
     lines += [
-        f"| 异常登记 | SSIM(b,c)<0.80 | {d['anomalies']['count']} 例 | 见 fig_e3_anomalies.png |",
+        f"| 异常登记 | SSIM(b,c)<0.80 | {anom_txt} | 见 fig_e3_anomalies.png |",
         "",
         f"记号：a=PyTorch FP32，b=OV FP32，c=OV INT8；`metrics_source={q['metrics_source']}`。",
     ]
+    out.mkdir(parents=True, exist_ok=True)
     dest = out / "quality_table.md"
     dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    if d.get('structure'):
+    if isinstance(d.get("structure"), dict) and isinstance(d["structure"].get("pairs"), dict):
         structure_table(q, out)
     return dest
 
