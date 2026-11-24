@@ -3,7 +3,7 @@
 用法：
   python tools/analyze_questionnaire.py \
     --key ../docs/experiments/questionnaire_T1/answer_key.csv \
-    --scores-dir ../human-review/runs/2026-11-23_sim/02_issue15_问卷 \
+    --scores-dir ../docs/experiments/questionnaire_T1/results/scores \
     --out-dir ../docs/experiments/questionnaire_T1/results
 
 评分人从 `scores_*.csv` 自动发现；四项独立，不合成总分。

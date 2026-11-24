@@ -3,15 +3,15 @@
 规则：
 - 以官方首轮 `human_review.csv` 为底，保留未在本轮分派样本的首轮状态（如 P3 抽查）。
 - 本轮 4 份个人表覆盖已分派样本；每位样本取主复核人，另存第二位复核。
-- 复核人使用化名（simR1..simR4），真实身份由作者私下保管，不入库。
+- 复核人使用组内代号（问卷人A..问卷人D），真实姓名不写入仓库。
 - 机器字段只读：不改 detection/quality JSON。
 
 用法：
   python tools/merge_review.py \
     --base-review ../human-review/human-review/human_review.csv \
     --checklist ../human-review/human-review/official_checklist.csv \
-    --personal-dir ../human-review/runs/2026-11-23_sim/01_issue20_复核 \
-    --failures ../human-review/runs/2026-11-23_sim/01_issue20_复核/detection_failures_merged.csv \
+    --personal-dir <本地复核 runs 目录> \
+    --failures <本地复核 runs 目录>/detection_failures_merged.csv \
     --out-dir ../docs/experiments/2026-11-09-7940HX/human_review_final
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ import glob
 import json
 from pathlib import Path
 
-PRIMARY = {"n02381460_1090": "simR1", "n02381460_1540": "simR2", "n02381460_3010": "simR3"}
+PRIMARY = {"n02381460_1090": "问卷人A", "n02381460_1540": "问卷人B", "n02381460_3010": "问卷人C"}
 FIRST_ROUND = "2026-11-10 first round"
 SECOND_ROUND = "2026-11-23 second round"
 
@@ -115,7 +115,7 @@ def main():
         "total": len(merged), "by_status": counts, "by_round": rounds,
         "second_reviews": len(second),
         "needs_discussion": needs,
-        "reviewer_ids": "simR1..simR4（化名）",
+        "reviewer_ids": "问卷人A..问卷人D（组内评分人代号）",
     }
     (out / "coverage.json").write_text(json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -125,7 +125,7 @@ def main():
          f"- 轮次计数：{rounds}",
          f"- 第二位复核：{len(second)} 例",
          f"- 待讨论：{', '.join(needs) if needs else '无'}",
-         "- 复核人：`simR1`–`simR4`（化名；真实身份由作者私下保管）",
+         "- 复核人：`问卷人A`–`问卷人D`（组内评分人代号，真实姓名不写入仓库）",
          "- `reviewed` 只表示已查看并记录，不代表质量通过。", "",
          "## 待讨论清单", "", "| 样本 | 主结论 | 第二复核 | 第二结论 |", "|---|---|---|---|"]
     for r in merged:
