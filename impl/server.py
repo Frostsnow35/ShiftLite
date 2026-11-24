@@ -15,7 +15,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from core.quality_state import format_classification_card, resolve_classification
+from core.quality_state import quality_measurements, format_classification_card, resolve_classification
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -137,9 +137,13 @@ def build_state(pair_id: str | None = None) -> dict:
 
     layers = _read_json(results / "layers.json")
     classification = resolve_classification(pair, quality)
+    measured = quality_measurements(pair, quality)
+    queue_file = results / "structure_review" / "review_queue.json"
+    queue_url = ("/artifacts/" + queue_file.relative_to(ART).as_posix()
+                 if pair.metric_enabled("mask_iou") and queue_file.is_file() else None)
     experiments = _experiments(
         conv, quant, bench, quality, avail,
-        layers=layers, pair=pair, classification=classification,
+        layers=layers, pair=pair, classification=classification, measurements=measured,
     )
 
     return {
@@ -170,13 +174,15 @@ def build_state(pair_id: str | None = None) -> dict:
         "quantize_report": quant,
         "quality": quality,
         "quality_classification": classification,
+        "quality_measurements": measured,
+        "structure_review_url": queue_url,
         "layers": layers,
         "experiments": experiments,
     }
 
 
 def _experiments(conv, quant, bench, quality, avail, layers=None,
-                 pair=None, classification=None) -> list[dict]:
+                 pair=None, classification=None, measurements=None) -> list[dict]:
     """实验编号与 docs/PLAN.md §6 保持一致（E0–E5）。
 
     apple2orange 扩展已按收敛决定取消，不再占用编号；任务型斑马判别与结构/背景
@@ -209,7 +215,8 @@ def _experiments(conv, quant, bench, quality, avail, layers=None,
     def quality_note():
         if not quality:
             return "待测"
-        base = "SSIM / PSNR / MAE 已算；"
+        summary = measurements if measurements is not None else quality_measurements(pair, quality)
+        base = (" / ".join(summary["pixels"]) + " 已算；" if summary["pixels"] else "逐像素指标未记录；")
         partial = quality.get("metrics_source") == "partial"
         if not (q_real or partial):
             if cls.get("status") == "disabled":
@@ -221,31 +228,12 @@ def _experiments(conv, quant, bench, quality, avail, layers=None,
         if not isinstance(deep, dict):
             deep = {}
         has_errors = isinstance(deep.get("errors"), list) and bool(deep["errors"])
-        parts = [label for key, label in (("lpips", "真实 LPIPS"), ("fid", "FID"), ("kid", "KID"))
-                 if deep.get(key)]
-        if deep.get("mask"):
-            parts.append("掩码 IoU + 背景 SSIM")
-        if deep.get("canny_edge_ssim_bc") is not None:
-            parts.append("Canny 边缘 SSIM")
-
+        parts = list(summary["deep"])
         cls_text = format_classification_card(cls, has_errors=has_errors)
-        heading = "深度评测部分完成" if partial else "深度评测"
-        if cls.get("status") in ("complete", "partial") and cls_text:
+        if cls_text:
             parts.append(cls_text)
-            details = "、".join(parts)
-        elif parts:
-            if cls_text:
-                parts.append(cls_text)
-            details = "、".join(parts)
-        elif cls.get("status") == "disabled" and cls_text:
-            err_tail = "，请查 deep.errors" if (partial or has_errors) else ""
-            details = f"尚无适用完整单项通过{err_tail}；{cls_text}"
-        else:
-            miss_note = cls_text or "此次未取得有效类别判别结果"
-            if "deep.errors" not in miss_note:
-                miss_note += "，请查 deep.errors"
-            details = f"尚无完整单项通过（{miss_note}）"
-
+        heading = "深度评测部分完成" if partial else "深度评测"
+        details = "、".join(parts) or "尚无完整单项通过"
         anomalies = deep.get("anomalies")
         if isinstance(anomalies, dict) and type(anomalies.get("count")) is int and anomalies["count"] >= 0:
             details += f"；异常登记 {anomalies['count']} 例"

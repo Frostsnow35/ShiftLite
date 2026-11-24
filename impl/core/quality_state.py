@@ -24,7 +24,7 @@ def _resolve_pair(pair: Pair | str | None) -> Pair:
 
 def is_valid_accuracy(value: Any) -> bool:
     """有效 top1_accuracy 为 [0, 1] 内的有限 int/float（排除 bool）。"""
-    return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1
+    return type(value) in (int, float) and 0 <= value <= 1
 
 
 def is_valid_sample_count(value: Any) -> bool:
@@ -35,6 +35,71 @@ def is_valid_sample_count(value: Any) -> bool:
 def format_accuracy_pct(value: float | int) -> str:
     """按两位小数格式化原始比例（沿用 Python 银行家舍入，如 0.03125 -> 3.12%）。"""
     return f"{value:.2%}"
+
+
+def as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def finite_number(value):
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def distribution_block(pair, deep, metric):
+    """Metadata in legacy blocks belongs to a domain only when a batch key identifies it."""
+    block = as_dict(deep.get(metric))
+    if not pair.metric_enabled("fid_kid"):
+        return {}
+    domain = block.get("ref_domain")
+    if domain is not None:
+        return block if domain == pair.ref_prefix else {}
+    keys = (f"{tag}_vs_real_{pair.ref_prefix}" for tag in ("b", "c"))
+    return block if any(key in block for key in keys) else {}
+
+
+def quality_measurements(pair, quality):
+    """Summary shared by the quality panel, progress notes and E3 card."""
+    pair = _resolve_pair(pair)
+    q = as_dict(quality)
+    rows = q.get("rows")
+    records = [as_dict(q.get("mean"))]
+    if isinstance(rows, list):
+        records.extend(row for row in rows if isinstance(row, dict))
+    pixels = [label.upper() for label in ("ssim", "psnr", "mae")
+              if any(finite_number(row.get(f"{label}_{sides}"))
+                     for row in records for sides in ("ab", "bc", "ac"))]
+    measured = []
+    if q.get("metrics_source") in REAL_OR_PARTIAL:
+        deep = as_dict(q.get("deep"))
+        lp = as_dict(deep.get("lpips"))
+        if pair.metric_enabled("lpips") and any(finite_number(lp.get(k)) for k in ("L_ab", "L_bc", "L_ac")):
+            measured.append("真实 LPIPS")
+        if pair.metric_enabled("edge_ssim") and finite_number(deep.get("canny_edge_ssim_bc")):
+            measured.append("Canny 边缘 SSIM")
+        for metric in ("fid", "kid"):
+            block = distribution_block(pair, deep, metric)
+            batches = []
+            for tag in ("b", "c"):
+                value = block.get(f"{tag}_vs_real_{pair.ref_prefix}")
+                if metric == "kid":
+                    value = as_dict(value).get("mean")
+                if finite_number(value):
+                    batches.append(tag.upper())
+            if batches:
+                suffix = f"（仅 {batches[0]} 批）" if len(batches) == 1 else ""
+                measured.append(metric.upper() + suffix)
+        mask = as_dict(deep.get("mask"))
+        pairs = as_dict(as_dict(deep.get("structure")).get("pairs"))
+        for flag, label, metrics in (("mask_iou", "前景掩码", ("iou", "dice")),
+                                     ("background_ssim", "背景 SSIM", ("background_ssim",))):
+            if not pair.metric_enabled(flag):
+                continue
+            legacy = any(finite_number(mask.get(f"mean_{m}_ac")) for m in metrics)
+            modern = any(finite_number(as_dict(as_dict(pairs.get(key)).get(m)).get("mean"))
+                         for key in ("x_a", "x_b", "x_c", "a_c") for m in metrics)
+            if legacy or modern:
+                measured.append(label)
+    return {"pixels": pixels, "deep": measured}
 
 
 def _parse_batch(raw_batch: Any) -> dict[str, Any] | None:

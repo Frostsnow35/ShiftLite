@@ -11,7 +11,7 @@ import cli
 import server
 from core import metrics_deep as md
 from core import pairs
-from core.quality_state import resolve_classification
+from core.quality_state import quality_measurements, resolve_classification
 
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "e3_partial_b_only.json"
@@ -170,8 +170,31 @@ class QualityCardTests(unittest.TestCase):
             with self.subTest(deep=deep):
                 card_err, cls_err = self.card("partial", deep, pair_id="horse2zebra")
                 self.assertEqual(cls_err["status"], "missing")
-                self.assertIn("deep.errors", card_err["note"])
+                self.assertEqual("deep.errors" in card_err["note"], bool(isinstance(deep, dict) and deep.get("errors")))
                 self.assertIn("此次未取得有效类别判别结果", card_err["note"])
+
+    def test_summary_requires_evidence_for_the_selected_pair(self):
+        from dataclasses import replace
+        historical = json.loads((FIXTURE_PATH.parents[1] / "artifacts/results/quality.json").read_text("utf-8"))
+        for pid in ("horse2zebra", "summer2winter"):
+            p = self.pairs[pid]
+            note = next(e["note"] for e in server._experiments(None, None, None, historical, {}, pair=p)
+                        if e["code"] == "E3")
+            self.assertIn("SSIM / PSNR / MAE 已算", note)
+            for label in ("FID", "KID", "前景掩码", "背景 SSIM"):
+                self.assertEqual(label in note, pid == "horse2zebra")
+        p = self.pairs["horse2zebra"]
+        p = replace(p, metrics={**p.metrics, "background_ssim": False})
+        q = {"metrics_source": "partial", "mean": {"ssim_bc": None, "psnr_bc": None}, "rows": [],
+             "deep": {"fid": {"n_real": 140}, "kid": {}}}
+        self.assertEqual(quality_measurements(p, q), {"pixels": [], "deep": []})
+        q["rows"] = [{"mae_ab": 0, "ssim_ab": False, "psnr_bc": "0"}]
+        q["deep"].update(fid={"b_vs_real_zebra": 0}, kid={"c_vs_real_zebra": {"mean": 0}},
+                         lpips={"L_ac": 0}, mask={"mean_iou_ac": 0, "mean_background_ssim_ac": 0})
+        self.assertEqual(quality_measurements(p, q), {"pixels": ["MAE"], "deep": [
+            "真实 LPIPS", "FID（仅 B 批）", "KID（仅 C 批）", "前景掩码"]})
+        q["metrics_source"] = "proxy"
+        self.assertEqual(quality_measurements(p, q), {"pixels": ["MAE"], "deep": []})
 
     def test_proxy_pending_and_build_state_api_contract(self):
         proxy, cls_proxy = self.card("proxy", {}, pair_id="horse2zebra")
@@ -234,6 +257,14 @@ class QualityCardTests(unittest.TestCase):
                     e3_dis = next(e for e in st_dis["experiments"] if e["code"] == "E3")
                     self.assertIn(f"类别判别不适用（{reason}）", e3_dis["note"])
                     self.assertNotIn("75.00%", e3_dis["note"])
+
+            for pid in ("horse2zebra", "zebra2horse"):
+                file = server.PAIRS[pid].paths.results / "structure_review" / "review_queue.json"
+                self.assertIsNone(server.build_state(pid)["structure_review_url"])
+                file.parent.mkdir(parents=True)
+                file.write_text("{}", encoding="utf-8")
+                expected_url = "/artifacts/" + file.relative_to(root).as_posix()
+                self.assertEqual(server.build_state(pid)["structure_review_url"], expected_url)
 
 
 if __name__ == '__main__':

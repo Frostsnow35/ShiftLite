@@ -88,7 +88,7 @@ function createSandbox(initialState = null) {
       host.textContent = msg;
     },
     bindTips() {},
-    tipHtml() { return ''; },
+    tipHtml(label, rows) { return JSON.stringify(rows); },
   };
   vm.createContext(context);
   const helpersCode = sliceBetween('function fmt(v, digits = 1)', 'function relTime(ts)');
@@ -98,10 +98,18 @@ function createSandbox(initialState = null) {
   return { context, hosts };
 }
 
+function manifest(id) {
+  const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '../pairs', id + '.json'), 'utf8'));
+  return { ...cfg, ref_prefix: cfg.dataset.ref_prefix };
+}
+const h2zPair = manifest('horse2zebra');
+const winterPair = manifest('summer2winter');
+const winterReason = winterPair.metrics.class_discrimination.reason;
+
 /* 1. 保留原有逐图表格契约测试 */
 function renderRow(row) {
-  const { context, hosts } = createSandbox();
-  context.renderQualityTable({ n_samples: 1, rows: [row] });
+  const { context, hosts } = createSandbox({ pair: h2zPair });
+  context.renderQualityTable({ metrics_source: 'real', n_samples: 1, rows: [row] });
   return hosts.qualityTable.children[1].children[0].children;
 }
 const cells = renderRow({
@@ -125,25 +133,12 @@ assert.equal(flattenText(renderRow({ sample: 'old', edge_ssim_bc: 0.8888 })[4]),
   assert.equal(context.fmtClassPct(0), '0.00%');
   assert.equal(context.fmtClassPct(1), '100.00%');
   assert.equal(context.fmtClassPct(null), '—');
+  for (const [v, pct] of [[0.38835, '38.83%'], [0.61165, '61.17%'], [-0, '-0.00%'], [Number.MIN_VALUE, '0.00%']]) {
+    assert.equal(context.fmtClassPct(v), pct);
+  }
 }
 
 /* 3. 六种 quality_classification 状态、分母、单侧 FID/KID 缺失及跨迁移对切换 */
-const h2zPair = {
-  id: 'horse2zebra',
-  ref_prefix: 'zebra',
-  metrics: { mask_iou: { enabled: true }, class_discrimination: { enabled: true } },
-};
-const winterReason = 'ImageNet 无 winter 类，判别无意义';
-const maskReason = 'Mask R-CNN 无 summer/winter 类别，掩码不可得';
-const winterPair = {
-  id: 'summer2winter',
-  ref_prefix: 'winter',
-  metrics: {
-    mask_iou: { enabled: false, reason: maskReason },
-    class_discrimination: { enabled: false, reason: winterReason },
-  },
-};
-
 function assertClassificationShape(cls) {
   assert.deepEqual(
     Object.keys(cls).sort(),
@@ -289,4 +284,60 @@ tiles = tileMap(hosts);
 assert.equal(tiles['类别判别'].value, '缺失');
 assert.match(tiles['类别判别'].sub, /此次未取得有效类别判别结果/);
 
-console.log('PASS: qualityTable bindings, half-even formatting, 6 classification states, pair switching, partial FID/KID');
+// Sparse structure and review materials must not interrupt the classification tiles.
+const partial = structuredClone(fixture);
+partial.deep.structure = { pairs: {} };
+context.STATE = { pair: h2zPair, quality: partial, quality_classification: clsPartialB };
+context.renderQuality();
+assert.equal(tileMap(hosts)['判别 · B 批（zebra）'].value, '75.00%（n=12）');
+assert.equal(tileMap(hosts)['输出一致性 a_c · IoU'].value, '缺失');
+assert.doesNotMatch(flattenText(hosts.qualityNotice), /待复核/);
+partial.deep.structure.review_queue = [];
+context.renderQuality();
+assert.match(flattenText(hosts.qualityNotice), /待复核 0 项/);
+partial.deep.structure.review_queue.push({sample:'example'});
+context.renderQuality();
+assert.ok(!hosts.deepTiles.children.some(el => el.tag === 'a'));
+context.STATE.structure_review_url = '/artifacts/results/structure_review/review_queue.json';
+context.renderQuality();
+assert.ok(hosts.deepTiles.children.some(el => el.tag === 'a'));
+
+const history = JSON.parse(fs.readFileSync(path.join(__dirname, '../artifacts/results/quality.json'), 'utf8'));
+context.STATE = { pair: winterPair, quality: history, quality_classification: clsDisabled };
+context.renderQuality();
+assert.equal(tileMap(hosts)['FID · B 批'].value, '缺失');
+assert.match(tileMap(hosts)['FID · B 批'].sub, /winter/);
+assert.equal(tileMap(hosts)['KID · B 批'].value, '缺失');
+const row = hosts.qualityTable.children[1].children[0];
+assert.equal(flattenText(row.children[6]), '—');
+assert.ok(row.attrs['data-tip']);
+assert.doesNotMatch(row.attrs['data-tip'], /"掩码 IoU .a,c.","[0-9]/);
+context.STATE.pair = {...h2zPair, metrics:{...h2zPair.metrics, background_ssim:false}};
+context.STATE.quality_classification = clsComplete;
+for (const [value, n] of [[undefined,'未记录'],[null,'未记录'],[0,110],[0.7,110]]) {
+  history.deep.mask.mean_dice_ac = value;
+  context.renderQuality();
+  assert.equal(tileMap(hosts)['输出一致性 Dice (a,c)'].sub, `有效 ${n}/120`);
+  assert.ok(!tileMap(hosts)['旧背景 SSIM (a,c)']);
+}
+history.metrics_source = 'proxy';
+context.STATE.quality_classification = clsProxy;
+context.renderQuality();
+assert.ok(!tileMap(hosts)['FID · B 批']);
+assert.ok(!tileMap(hosts)['输出一致性 IoU (a,c)']);
+assert.equal(flattenText(hosts.qualityTable.children[1].children[0].children[6]), '—');
+context.STATE = {pair:h2zPair, quality:partial, quality_classification:clsPartialB,
+  quality_measurements:{pixels:[], deep:['FID（仅 B 批）', 'KID（仅 C 批）']}};
+partial.deep.fid = { b_vs_real_zebra:0 };
+partial.deep.kid = { c_vs_real_zebra:{mean:0} };
+context.renderQuality();
+assert.match(flattenText(hosts.qualityNotice), /FID（仅 B 批）、KID（仅 C 批）/);
+assert.equal(tileMap(hosts)['FID · B 批'].value, '0.00');
+assert.equal(tileMap(hosts)['KID · C 批'].value, '0.0000');
+partial.deep.fid = {n_real:140};
+partial.deep.kid = {};
+context.STATE.quality_measurements.deep = [];
+context.renderQuality();
+assert.doesNotMatch(flattenText(hosts.qualityNotice), /FID|KID|SSIM|PSNR|MAE/);
+assert.equal(tileMap(hosts)['FID · B 批'].value, '缺失');
+console.log('PASS: E3 quality panel, target domains, partial structure, proxy/disabled isolation, Dice counts and percentage rounding');

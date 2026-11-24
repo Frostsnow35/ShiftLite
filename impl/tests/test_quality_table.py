@@ -1,5 +1,8 @@
 import copy
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -164,6 +167,83 @@ class QualityTableTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as ctx:
                 quality_table(root, root / "figures", self.h2z)
             self.assertIn("没有 deep 字段", str(ctx.exception))
+
+    def test_legacy_reference_counts_dice_and_explicit_conflicts(self):
+        q = json.loads((FIXTURE_PATH.parents[1] / "artifacts/results/quality.json").read_text("utf-8"))
+        positive = self._export(q, self.h2z)
+        self.assertIn("zebra 参照批 n=140", positive)
+        self.assertIn("有效 未记录/120 对", positive)
+        winter = self._export(q, self.winter)
+        self.assertIn("winter 参照数未记录", winter)
+        self.assertNotIn("80.70", winter)
+        q["deep"]["fid"].update(ref_domain="winter", b_vs_real_zebra=0)
+        q["deep"]["kid"]["ref_domain"] = "winter"
+        for value, expected in ((None, "未记录"), (0.0, "110"), (0.7, "110")):
+            q["deep"]["mask"]["mean_dice_ac"] = value
+            text = self._export(q, self.h2z)
+            self.assertIn("zebra 参照数未记录", text)
+            self.assertIn("FID(B vs 真实zebra) | 缺失", text)
+            self.assertIn("KID(B) | 缺失", text)
+            dice_line = next(l for l in text.splitlines() if "掩码 Dice(a,c)" in l)
+            self.assertIn(f"有效 {expected}/120 对", dice_line)
+        q["deep"]["fid"] = {"n_real": 140}
+        self.assertIn("zebra 参照数未记录", self._export(q, self.h2z))
+
+    def test_structure_side_table_is_independent_and_preserves_zero_valid(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        q = json.loads(self.fixture_text)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "figures"
+            main, side = out / "quality_table.md", out / "structure_table_v2.md"
+            for pairs, expected in (
+                    ({"a_c": {"iou": {"mean": 0.5}}}, "0.500000 | 未记录/未记录"),
+                    ({"a_c": {"iou": {"mean": None, "n_valid": 0, "n_total": 12}}}, "缺失 | 0/12"),
+                    ({}, None)):
+                q["deep"]["structure"] = {"pairs": pairs}
+                (root / "quality.json").write_text(json.dumps(q), encoding="utf-8")
+                log = StringIO()
+                with redirect_stdout(log):
+                    paths = make_all(root, out, self.h2z)
+                self.assertIn("75.00% / 缺失", main.read_text(encoding="utf-8"))
+                self.assertNotIn("[跳过] E3 质量对比表", log.getvalue())
+                if expected:
+                    self.assertEqual(paths, [main, side])
+                    self.assertIn(expected, side.read_text(encoding="utf-8"))
+                else:
+                    self.assertEqual(paths, [main])
+                    self.assertIn("[跳过] E3 结构评测 v2 副表", log.getvalue())
+                    self.assertIn("本次未生成", log.getvalue())
+
+    @unittest.skipUnless(os.name == "nt" and (FIXTURE_PATH.parents[1] / "run-local.ps1").is_file(),
+                         "requires the Windows launcher in a source checkout")
+    def test_launcher_figures_keeps_main_table_for_empty_structure(self):
+        q = json.loads(self.fixture_text)
+        q["deep"]["structure"] = {"pairs": {}}
+        with tempfile.TemporaryDirectory(prefix="ShiftLite E3 交接-") as tmp:
+            art = Path(tmp) / "impl/artifacts"
+            (art / "results").mkdir(parents=True)
+            (art / "results/quality.json").write_text(json.dumps(q), encoding="utf-8")
+            env = dict(os.environ, E3_RUN=tmp, E3_PYTHON=sys.executable,
+                       E3_LAUNCHER=str(FIXTURE_PATH.parents[1] / "run-local.ps1"))
+            command = ("[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); "
+                       "& $env:E3_LAUNCHER -Python $env:E3_PYTHON -RunRoot $env:E3_RUN "
+                       "-CliArgs @('figures','--pair','horse2zebra'); exit $LASTEXITCODE")
+            out = subprocess.check_output(["powershell.exe", "-NoProfile", "-ExecutionPolicy",
+                                          "RemoteSigned", "-Command", command], env=env,
+                                         stderr=subprocess.STDOUT, timeout=90).decode("utf-8")
+            self.assertIn("[跳过] E3 结构评测 v2 副表", out)
+            self.assertNotIn("[跳过] E3 质量对比表", out)
+            self.assertIn("quality_table.md", out)
+            self.assertFalse((art / "figures/structure_table_v2.md").exists())
+            self.assertIn("75.00% / 缺失", (art / "figures/quality_table.md").read_text("utf-8"))
+
+    def test_rounded_classification_matches_web_contract(self):
+        q = _full_sample()
+        for batch, value in zip(q["deep"]["zebra_discrimination"].values(), [0.38835, 0.61165]):
+            batch["top1_accuracy"] = value
+        self.assertIn("38.83% / 61.17%", self._export(q))
 
 
 if __name__ == "__main__":
