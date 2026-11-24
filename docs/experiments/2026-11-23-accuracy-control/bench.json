@@ -1,0 +1,30 @@
+[
+  {
+    "model": "horse2zebra",
+    "mean_ms": 846.5,
+    "std_ms": 52.0,
+    "fps": 1.18,
+    "size_mb": 43.52
+  },
+  {
+    "model": "horse2zebra",
+    "mean_ms": 1053.4,
+    "std_ms": 89.8,
+    "fps": 0.95,
+    "size_mb": 43.52
+  },
+  {
+    "model": "horse2zebra_int8",
+    "mean_ms": 269.0,
+    "std_ms": 14.4,
+    "fps": 3.72,
+    "size_mb": 11.1
+  },
+  {
+    "model": "horse2zebra_int8_ac",
+    "mean_ms": 279.5,
+    "std_ms": 24.4,
+    "fps": 3.58,
+    "size_mb": 11.1
+  }
+]

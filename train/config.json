@@ -1,0 +1,14 @@
+{
+  "dataset": "horse2zebra",
+  "image_size": 256,
+  "batch_size": 1,
+  "lr": 0.0002,
+  "beta1": 0.5,
+  "n_epochs": 100,
+  "n_epochs_decay": 100,
+  "lambda_cycle": 10.0,
+  "lambda_identity": 0.5,
+  "pool_size": 50,
+  "seed": 20261123,
+  "note": "CycleGAN 论文默认超参（256x256，batch=1，Adam 2e-4，100+100 线性衰减）。冒烟可 --n-epochs 1 --max-iters 20。"
+}

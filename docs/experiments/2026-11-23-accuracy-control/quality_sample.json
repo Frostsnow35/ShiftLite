@@ -1,0 +1,14 @@
+{
+  "n": 30,
+  "ptq_int8": {
+    "ssim_b_c": 0.8895,
+    "lpips_b_c": 0.0944
+  },
+  "accuracy_control": {
+    "ssim_b_c": 0.8859,
+    "lpips_b_c": 0.0982
+  },
+  "c_vs_cac": {
+    "ssim": 0.8445
+  }
+}
