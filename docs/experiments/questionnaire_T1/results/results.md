@@ -1,7 +1,7 @@
 # #15 主观问卷结果（盲评 · FP32 vs INT8）
 
-> 设计：组内 4 人化名 `simR1`–`simR4`，30 对盲评（左右随机），四项各 1–5 分，左右分别评分。
-> 材料：`../questionnaire_T1/pairs/`（本地生成，不入库）；评分表：`scores/scores_simR1..4.csv`。
+> 设计：组内 4 位评分人，代号 `问卷人A`–`问卷人D`，30 对盲评（左右随机），四项各 1–5 分，左右分别评分。
+> 材料：`../questionnaire_T1/pairs/`（本地生成，不入库）；评分表：`scores/scores_问卷人A..D.csv`。
 > 图像批次：本机 2026-11-19 `quality --deep --limit 120` 的 B（FP32）/C（INT8）输出，非官方 2026-11-09 批次。
 
 ## 1 描述统计（n=30 对 × 4 人 = 120 个评分/组）
@@ -49,7 +49,7 @@
 cd impl
 python tools/analyze_questionnaire.py `
   --key ..\docs\experiments\questionnaire_T1\answer_key.csv `
-  --scores-dir ..\human-review\runs\2026-11-23_sim\02_issue15_问卷 `
+  --scores-dir ..\questionnaire_T1\results\scores `
   --out-dir ..\docs\experiments\questionnaire_T1\results
 ```
 
@@ -57,6 +57,6 @@ python tools/analyze_questionnaire.py `
 
 ## 6 边界
 
-- 评分为化名组员记录，真实身份由作者私下保管；本文件不含真名。
+- 评分以组内代号 问卷人A–D 记录，真实姓名不写入仓库。
 - 盲评图不入库；`pairs/` 需随问卷包分发或本地重生成。
 - 批次为本机 2026-11-19，不是官方 2026-11-09；不得与 #20 检测复核或跨批次指标混表。

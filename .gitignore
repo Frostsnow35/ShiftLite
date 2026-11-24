@@ -31,3 +31,4 @@ train/runs/
 
 # 复核拼图本地留存（生成脚本 impl/tools/build_review_contact_sheets.py 可重建）
 docs/experiments/2026-11-23-review/contact_sheets/
+.workbuddy/
